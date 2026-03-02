@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Nivel {
+  INICIANTE
+  INTERMEDIARIO
+  AVANCADO
+}
+
+enum StatusAluno {
+  ATIVO
+  INATIVO
+}
+
+model Usuario {
+  id         BigInt   @id @default(autoincrement())
+  email      String   @unique @db.VarChar(150)
+  cpf        String   @unique @db.Char(11)
+  senha_hash String?  @db.VarChar(255)   // agora pode ser null
+  nome       String   @db.VarChar(150)
+  telefone   String?  @db.VarChar(20)
+  foto_perfil String? @db.VarChar(255)
+  ativo      Boolean  @default(false)    // só ativa após definir senha
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  admin      Admin?
+  professor  Professor?
+  aluno      Aluno?
+
+  tokens     TokenAtivacao[]
+
+  @@map("usuarios")
+}
+
+model Admin {
+  id         BigInt  @id @default(autoincrement())
+  usuario_id BigInt  @unique
+
+  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  relatorios Relatorio[]
+
+  @@map("admins")
+}
+
+model Professor {
+  id         BigInt  @id @default(autoincrement())
+  usuario_id BigInt  @unique
+  cref       String  @unique @db.VarChar(20)
+
+  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  gruposTreino  GrupoTreino[]
+  fichasTreino  FichaTreino[]
+  exercicios    Exercicio[]
+
+  @@map("professores")
+}
+
+model Aluno {
+  id         BigInt  @id @default(autoincrement())
+  usuario_id BigInt  @unique
+  nivel      Nivel   @default(INICIANTE)
+  pontuacao  Int     @default(0)
+  status     StatusAluno @default(ATIVO)
+
+  usuario     Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  fichasTreino   FichaTreino[]
+  registros      RegistroTreino[]
+  gamificacoes   AlunoGamificacao[]
+  ranking        Ranking?
+
+  @@map("alunos")
+}
+
+model GrupoTreino {
+  id         BigInt   @id @default(autoincrement())
+  nome       String   @db.VarChar(150)
+  descricao  String?  @db.Text
+  nivel      Nivel?
+  criado_por BigInt
+  created_at DateTime @default(now())
+
+  professor  Professor @relation(fields: [criado_por], references: [id])
+  fichas     FichaTreino[]
+
+  @@map("grupos_treino")
+}
+
+model FichaTreino {
+  id           BigInt   @id @default(autoincrement())
+  nome         String   @db.VarChar(150)
+  aluno_id     BigInt
+  professor_id BigInt
+  grupo_id     BigInt?
+  data_inicio  DateTime?
+  data_fim     DateTime?
+  ativa        Boolean  @default(true)
+
+  aluno     Aluno     @relation(fields: [aluno_id], references: [id])
+  professor Professor @relation(fields: [professor_id], references: [id])
+  grupo     GrupoTreino? @relation(fields: [grupo_id], references: [id])
+
+  exercicios FichaExercicio[]
+
+  @@map("fichas_treino")
+}
+
+model Exercicio {
+  id            BigInt  @id @default(autoincrement())
+  nome          String  @db.VarChar(150)
+  descricao     String? @db.Text
+  grupo_muscular String? @db.VarChar(100)
+  criado_por    BigInt
+
+  professor Professor @relation(fields: [criado_por], references: [id])
+  fichas     FichaExercicio[]
+
+  @@map("exercicios")
+}
+
+model FichaExercicio {
+  id              BigInt   @id @default(autoincrement())
+  ficha_id        BigInt
+  exercicio_id    BigInt
+  series          Int
+  repeticoes      Int
+  descanso_segundos Int?
+  carga_sugerida  Decimal? @db.Decimal(6,2)
+
+  ficha      FichaTreino @relation(fields: [ficha_id], references: [id], onDelete: Cascade)
+  exercicio  Exercicio   @relation(fields: [exercicio_id], references: [id])
+
+  registros  RegistroTreino[]
+
+  @@map("ficha_exercicios")
+}
+
+model RegistroTreino {
+  id                BigInt   @id @default(autoincrement())
+  aluno_id          BigInt
+  ficha_exercicio_id BigInt
+  carga_real        Decimal? @db.Decimal(6,2)
+  repeticoes_real   Int?
+  data_execucao     DateTime @default(now())
+
+  aluno        Aluno          @relation(fields: [aluno_id], references: [id])
+  fichaExercicio FichaExercicio @relation(fields: [ficha_exercicio_id], references: [id], onDelete: Cascade)
+
+  @@map("registro_treino")
+}
+
+model Gamificacao {
+  id        BigInt  @id @default(autoincrement())
+  nome      String  @db.VarChar(150)
+  descricao String? @db.Text
+  pontos    Int
+
+  alunos AlunoGamificacao[]
+
+  @@map("gamificacao")
+}
+
+model AlunoGamificacao {
+  id             BigInt   @id @default(autoincrement())
+  aluno_id       BigInt
+  gamificacao_id BigInt
+  data_conquista DateTime @default(now())
+
+  aluno       Aluno       @relation(fields: [aluno_id], references: [id], onDelete: Cascade)
+  gamificacao Gamificacao @relation(fields: [gamificacao_id], references: [id], onDelete: Cascade)
+
+  @@map("aluno_gamificacao")
+}
+
+model Ranking {
+  id           BigInt @id @default(autoincrement())
+  aluno_id     BigInt @unique
+  pontos_total Int    @default(0)
+
+  aluno Aluno @relation(fields: [aluno_id], references: [id], onDelete: Cascade)
+
+  @@map("ranking")
+}
+
+model Relatorio {
+  id           BigInt   @id @default(autoincrement())
+  tipo         String   @db.VarChar(100)
+  referencia_id BigInt?
+  gerado_por   BigInt
+  data_geracao DateTime @default(now())
+
+  admin Admin @relation(fields: [gerado_por], references: [id])
+
+  @@map("relatorios")
+}
+
+model TokenAtivacao {
+  id         BigInt   @id @default(autoincrement())
+  usuario_id BigInt
+  token      String   @unique
+  expira_em  DateTime
+  usado      Boolean  @default(false)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("tokens_ativacao")
+}
