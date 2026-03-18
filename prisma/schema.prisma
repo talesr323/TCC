@@ -113,33 +113,45 @@ model FichaTreino {
   @@map("fichas_treino")
 }
 
-model Exercicio {
-  id            BigInt  @id @default(autoincrement())
-  nome          String  @db.VarChar(150)
-  descricao     String? @db.Text
-  grupo_muscular String? @db.VarChar(100)
-  criado_por    BigInt
+model GrupoMuscular {
+  id    BigInt @id @default(autoincrement())
+  nome  String @unique
 
-  professor Professor @relation(fields: [criado_por], references: [id])
+  exercicios Exercicio[]
+
+  @@map("grupos_musculares")
+}
+
+model Exercicio {
+  id          BigInt  @id @default(autoincrement())
+  nome        String  @db.VarChar(150)
+  descricao   String? @db.Text
+  grupo_id    BigInt
+  criado_por  BigInt
+
+  grupo    GrupoMuscular? @relation(fields: [grupo_id], references: [id])
+  professor Professor     @relation(fields: [criado_por], references: [id])
+
   fichas     FichaExercicio[]
 
   @@map("exercicios")
 }
 
 model FichaExercicio {
-  id              BigInt   @id @default(autoincrement())
-  ficha_id        BigInt
-  exercicio_id    BigInt
-  series          Int
-  repeticoes      Int
+  id                BigInt   @id @default(autoincrement())
+  ficha_id          BigInt
+  exercicio_id      BigInt
+  series            Int
+  repeticoes        Int
   descanso_segundos Int?
-  carga_sugerida  Decimal? @db.Decimal(6,2)
+  carga_sugerida    Decimal? @db.Decimal(6,2)
 
   ficha      FichaTreino @relation(fields: [ficha_id], references: [id], onDelete: Cascade)
   exercicio  Exercicio   @relation(fields: [exercicio_id], references: [id])
 
   registros  RegistroTreino[]
 
+  @@unique([ficha_id, exercicio_id], name: "ficha_id_exercicio_id")
   @@map("ficha_exercicios")
 }
 

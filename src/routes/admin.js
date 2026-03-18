@@ -7,9 +7,7 @@ const crypto = require("crypto");
 
 const router = express.Router();
 
-/* =========================
-   ADMIN CRIA USUÁRIO
-========================= */
+/*Admin Cria Usuario*/
 router.post("/criar-usuario", auth, onlyAdmin, async (req, res) => {
   try {
 
