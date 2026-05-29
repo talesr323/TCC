@@ -6,6 +6,7 @@ const router = express.Router()
 
 // LISTAR EXERCÍCIOS
 router.get("/", auth, async (req, res) => {
+
   try {
 
     const exercicios = await prisma.exercicio.findMany()
@@ -13,18 +14,26 @@ router.get("/", auth, async (req, res) => {
     res.json(exercicios)
 
   } catch (error) {
+
     res.status(500).json(error)
+
   }
+
 })
 
 
 // CRIAR EXERCÍCIO
 router.post("/", auth, async (req, res) => {
+
   try {
 
-    const professor_id = req.usuario.id
+    const professor_id = req.usuario.professor_id
 
-    const { nome, descricao, grupo_muscular } = req.body
+    const {
+      nome,
+      descricao,
+      grupo_muscular
+    } = req.body
 
     const exercicio = await prisma.exercicio.create({
       data: {
@@ -38,8 +47,11 @@ router.post("/", auth, async (req, res) => {
     res.status(201).json(exercicio)
 
   } catch (error) {
+
     res.status(500).json(error)
+
   }
+
 })
 
 export default router
