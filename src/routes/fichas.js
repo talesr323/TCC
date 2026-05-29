@@ -8,9 +8,10 @@ const router = express.Router()
 CRIAR FICHA DE TREINO
 */
 router.post("/", auth, async (req, res) => {
+
   try {
 
-    const professor_id = req.usuario.id
+    const professor_id = req.usuario.professor_id
 
     const {
       nome,
@@ -40,6 +41,7 @@ router.post("/", auth, async (req, res) => {
           }))
         }
       },
+
       include: {
         exercicios: true
       }
@@ -48,25 +50,32 @@ router.post("/", auth, async (req, res) => {
     res.status(201).json(ficha)
 
   } catch (error) {
+
     res.status(500).json({
       erro: "Erro ao criar ficha",
       detalhe: error.message
     })
+
   }
+
 })
 
+
+// LISTAR FICHAS
 router.get("/", auth, async (req, res) => {
 
   try {
 
-    const professor_id = req.usuario.id
+    const professor_id = req.usuario.professor_id
 
     const fichas = await prisma.fichaTreino.findMany({
       where: {
         professor_id
       },
+
       include: {
         aluno: true,
+
         exercicios: {
           include: {
             exercicio: true
@@ -78,7 +87,9 @@ router.get("/", auth, async (req, res) => {
     res.json(fichas)
 
   } catch (error) {
+
     res.status(500).json(error)
+
   }
 
 })

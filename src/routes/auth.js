@@ -17,6 +17,7 @@ const formatBigInt = (data) =>
 // 🔐 ATIVAR CONTA
 router.post("/ativar", async (req, res) => {
   try {
+
     const { token, senha } = req.body
 
     if (!token || !senha) {
@@ -30,17 +31,23 @@ router.post("/ativar", async (req, res) => {
     })
 
     if (!registro || registro.usado) {
-      return res.status(400).json({ error: "Token inválido" })
+      return res.status(400).json({
+        error: "Token inválido"
+      })
     }
 
     if (registro.expira_em < new Date()) {
-      return res.status(400).json({ error: "Token expirado" })
+      return res.status(400).json({
+        error: "Token expirado"
+      })
     }
 
     const senha_hash = await bcrypt.hash(senha, 10)
 
     await prisma.usuario.update({
-      where: { id: registro.usuario_id },
+      where: {
+        id: registro.usuario_id
+      },
       data: {
         senha_hash,
         ativo: true
@@ -48,22 +55,35 @@ router.post("/ativar", async (req, res) => {
     })
 
     await prisma.tokenAtivacao.update({
-      where: { id: registro.id },
-      data: { usado: true }
+      where: {
+        id: registro.id
+      },
+      data: {
+        usado: true
+      }
     })
 
-    return res.json({ message: "Conta ativada com sucesso" })
+    return res.json({
+      message: "Conta ativada com sucesso"
+    })
 
   } catch (error) {
+
     console.error(error)
-    return res.status(500).json({ error: error.message })
+
+    return res.status(500).json({
+      error: error.message
+    })
+
   }
 })
 
 
 // 🔑 LOGIN
 router.post("/login", async (req, res) => {
+
   try {
+
     const { email, senha } = req.body
 
     if (!email || !senha) {
@@ -73,60 +93,94 @@ router.post("/login", async (req, res) => {
     }
 
     const user = await prisma.usuario.findUnique({
-  where: { email },
-  include: {
-    admin: true,
-    professor: true,
-    aluno: true
-  }
-})
+      where: {
+        email
+      },
 
-if (!user) {
-  return res.status(404).json({ error: "Usuário não encontrado" })
-}
+      include: {
+        admin: true,
+        professor: true,
+        aluno: true
+      }
+    })
 
-if (!user.ativo) {
-  return res.status(403).json({ error: "Conta não ativada" })
-}
+    if (!user) {
+      return res.status(404).json({
+        error: "Usuário não encontrado"
+      })
+    }
 
-if (!user.senha_hash) {
-  return res.status(403).json({ error: "Senha não definida" })
-}
+    if (!user.ativo) {
+      return res.status(403).json({
+        error: "Conta não ativada"
+      })
+    }
 
-if (!user.academia_id) {
-  return res.status(400).json({
-    error: "Usuário não vinculado a academia"
-  })
-}
+    if (!user.senha_hash) {
+      return res.status(403).json({
+        error: "Senha não definida"
+      })
+    }
 
-const senhaValida = await bcrypt.compare(senha, user.senha_hash)
+    if (!user.academia_id) {
+      return res.status(400).json({
+        error: "Usuário não vinculado a academia"
+      })
+    }
 
-if (!senhaValida) {
-  return res.status(401).json({ error: "Senha inválida" })
-}
+    const senhaValida = await bcrypt.compare(
+      senha,
+      user.senha_hash
+    )
 
-let tipo = "USER"
+    if (!senhaValida) {
+      return res.status(401).json({
+        error: "Senha inválida"
+      })
+    }
 
-if (user.admin) tipo = "ADMIN"
-else if (user.professor) tipo = "PROFESSOR"
-else if (user.aluno) tipo = "ALUNO"
+    let tipo = "USER"
 
-const token = jwt.sign(
-  {
-    id: user.id.toString(),
-    email: user.email,
-    tipo,
-    academia_id: user.academia_id
-  },
-  process.env.JWT_SECRET,
-  { expiresIn: "1d" }
-)
+    if (user.admin) tipo = "ADMIN"
+    else if (user.professor) tipo = "PROFESSOR"
+    else if (user.aluno) tipo = "ALUNO"
 
-return res.json({ token, tipo })
+    // ✅ TOKEN CORRIGIDO
+    const token = jwt.sign(
+      {
+        usuario_id: user.id.toString(),
+
+        professor_id: user.professor?.id?.toString() || null,
+        aluno_id: user.aluno?.id?.toString() || null,
+        admin_id: user.admin?.id?.toString() || null,
+
+        email: user.email,
+        tipo,
+
+        academia_id: user.academia_id.toString()
+      },
+
+      process.env.JWT_SECRET,
+
+      {
+        expiresIn: "1d"
+      }
+    )
+
+    return res.json({
+      token,
+      tipo,
+      usuario: formatBigInt(user)
+    })
 
   } catch (error) {
+
     console.error(error)
-    return res.status(500).json({ error: error.message })
+
+    return res.status(500).json({
+      error: error.message
+    })
+
   }
 })
 
