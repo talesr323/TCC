@@ -5,11 +5,10 @@ import express from "express"
 
 import usuariosRoutes from "./src/routes/usuarios.js"
 import authRoutes from "./src/routes/auth.js"
-import adminRoutes from "./src/routes/admin.js"
 import fichasRoutes from "./src/routes/fichas.js"
 import exerciciosRoutes from "./src/routes/exercicios.js"
 import gruposRoutes from "./src/routes/grupos.js"
-import setupRoutes from "./src/routes/setup.js"
+import setupRoutes from "./src/routes/academia.js"
 
 import auth from "./src/middlewares/auth.js" // 🔥 IMPORTANTE
 
@@ -36,7 +35,6 @@ app.use(auth) // 🔥 AQUI começa a proteção
 // 🔒 ROTAS PROTEGIDAS
 // =======================
 app.use("/usuarios", usuariosRoutes)
-app.use("/admin", adminRoutes)
 app.use("/fichas", fichasRoutes)
 app.use("/exercicios", exerciciosRoutes)
 app.use("/grupos", gruposRoutes)

@@ -101,14 +101,14 @@ model GrupoTreino {
 model FichaTreino {
   id           BigInt   @id @default(autoincrement())
   nome         String   @db.VarChar(150)
-  aluno_id     BigInt
+  aluno_id     BigInt?
   professor_id BigInt
   grupo_id     BigInt?
   data_inicio  DateTime?
   data_fim     DateTime?
   ativa        Boolean  @default(true)
 
-  aluno     Aluno     @relation(fields: [aluno_id], references: [id])
+  aluno     Aluno?     @relation(fields: [aluno_id], references: [id])
   professor Professor @relation(fields: [professor_id], references: [id])
   grupo     GrupoTreino? @relation(fields: [grupo_id], references: [id])
 

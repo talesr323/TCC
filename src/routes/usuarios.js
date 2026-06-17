@@ -2,6 +2,7 @@ import express from "express"
 import bcrypt from "bcryptjs"
 import { PrismaClient } from "@prisma/client"
 import auth from "../middlewares/auth.js"
+import admin from "../middlewares/admin.js"
 import crypto from "crypto"
 
 const prisma = new PrismaClient()
@@ -16,7 +17,7 @@ const formatBigInt = (data) =>
   )
 
 // 🔥 CRIAR USUÁRIO (SEM SENHA + COM TOKEN)
-router.post("/", auth, async (req, res) => {
+router.post("/", auth, admin, async (req, res) => {
   try {
     const { email, cpf, nome, telefone, foto_perfil, tipo, cref } = req.body
 
@@ -39,22 +40,7 @@ router.post("/", auth, async (req, res) => {
       })
     }
 
-    // 🔥 CRIA USUÁRIO
-    const usuario = await prisma.usuario.create({
-      data: {
-        email,
-        cpf,
-        nome,
-        telefone,
-        foto_perfil,
-        ativo: false,
-        academia_id: req.usuario.academia_id // ✅ corrigido
-      }
-    })
-
-    // 🔐 CRIA PERFIL
-    let perfil = null
-
+    //VALIDAÇÃO DO TIPO DE USUÁRIO
     if (tipo === "PROFESSOR") {
       if (!cref) {
         return res.status(400).json({
@@ -77,6 +63,22 @@ router.post("/", auth, async (req, res) => {
         }
       })
     }
+
+    // 🔥 CRIA USUÁRIO
+    const usuario = await prisma.usuario.create({
+      data: {
+        email,
+        cpf,
+        nome,
+        telefone,
+        foto_perfil,
+        ativo: false,
+        academia_id: req.usuario.academia_id // ✅ corrigido
+      }
+    })
+
+    // 🔐 CRIA PERFIL
+    let perfil = null
 
     // 🔑 GERA TOKEN
     const tokenAtivacao = crypto.randomBytes(32).toString("hex")
