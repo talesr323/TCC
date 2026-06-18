@@ -17,9 +17,18 @@ const formatBigInt = (data) =>
   )
 
 // 🔥 CRIAR USUÁRIO (SEM SENHA + COM TOKEN)
+// 🔥 CRIAR USUÁRIO (SEM SENHA + COM TOKEN)
 router.post("/", auth, admin, async (req, res) => {
   try {
-    const { email, cpf, nome, telefone, foto_perfil, tipo, cref } = req.body
+    const {
+      email,
+      cpf,
+      nome,
+      telefone,
+      foto_perfil,
+      tipo,
+      cref
+    } = req.body
 
     if (!email || !cpf || !nome || !tipo) {
       return res.status(400).json({
@@ -30,24 +39,41 @@ router.post("/", auth, admin, async (req, res) => {
     // 🚫 Bloqueia ADMIN
     if (tipo === "ADMIN") {
       return res.status(403).json({
-        error: "Não é permitido criar administrador"
+        error: "Não é permitido criar administrador."
       })
     }
 
+    // ✅ Valida tipo
     if (!["ALUNO", "PROFESSOR"].includes(tipo)) {
       return res.status(400).json({
-        error: "Tipo deve ser ALUNO ou PROFESSOR"
+        error: "Tipo deve ser ALUNO ou PROFESSOR."
       })
     }
 
-    //VALIDAÇÃO DO TIPO DE USUÁRIO
-    if (tipo === "PROFESSOR") {
-      if (!cref) {
-        return res.status(400).json({
-          error: "CREF é obrigatório para professor."
-        })
-      }
+    // ✅ Valida CREF para professor
+    if (tipo === "PROFESSOR" && !cref) {
+      return res.status(400).json({
+        error: "CREF é obrigatório para professor."
+      })
+    }
 
+    // 🔥 CRIA USUÁRIO
+    const usuario = await prisma.usuario.create({
+      data: {
+        email,
+        cpf,
+        nome,
+        telefone,
+        foto_perfil, 
+        ativo: false,
+        academia_id: req.usuario.academia_id
+      }
+    })
+
+    // 🔐 CRIA PERFIL
+    let perfil = null
+
+    if (tipo === "PROFESSOR") {
       perfil = await prisma.professor.create({
         data: {
           usuario_id: usuario.id,
@@ -64,30 +90,16 @@ router.post("/", auth, admin, async (req, res) => {
       })
     }
 
-    // 🔥 CRIA USUÁRIO
-    const usuario = await prisma.usuario.create({
-      data: {
-        email,
-        cpf,
-        nome,
-        telefone,
-        foto_perfil,
-        ativo: false,
-        academia_id: req.usuario.academia_id // ✅ corrigido
-      }
-    })
-
-    // 🔐 CRIA PERFIL
-    let perfil = null
-
-    // 🔑 GERA TOKEN
+    // 🔑 GERA TOKEN DE ATIVAÇÃO
     const tokenAtivacao = crypto.randomBytes(32).toString("hex")
 
     await prisma.tokenAtivacao.create({
       data: {
         usuario_id: usuario.id,
         token: tokenAtivacao,
-        expira_em: new Date(Date.now() + 1000 * 60 * 60 * 24)
+        expira_em: new Date(
+          Date.now() + 1000 * 60 * 60 * 24 // 24 horas
+        )
       }
     })
 
