@@ -1,187 +1,146 @@
-import express from "express"
-import bcrypt from "bcryptjs"
-import jwt from "jsonwebtoken"
-import { PrismaClient } from "@prisma/client"
+import bcrypt from 'bcryptjs';
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient()
-const router = express.Router()
+const prisma = new PrismaClient();
+const router = express.Router();
 
-// 🔧 Função para tratar BigInt
+//Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
-    JSON.stringify(data, (key, value) =>
-      typeof value === "bigint" ? value.toString() : value
-    )
-  )
+    JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
+  );
 
-// 🔐 ATIVAR CONTA
-router.post("/ativar", async (req, res) => {
+//🔑 Ativar conta
+router.post('/ativacao-conta', async (req, res) => {
   try {
+    const { token, senha } = req.body;
 
-    const { token, senha } = req.body
-
-    if (!token || !senha) {
-      return res.status(400).json({
-        error: "Token e senha obrigatórios"
-      })
+    if (!token || token.trim() === '') {
+      return res.status(400).json({ error: "O campo 'Token' é obrigatório." });
     }
 
-    const registro = await prisma.tokenAtivacao.findUnique({
-      where: { token }
-    })
-
-    if (!registro || registro.usado) {
-      return res.status(400).json({
-        error: "Token inválido"
-      })
+    if (!senha || senha.trim() === '') {
+      return res.status(400).json({ error: "O campo 'Senha' é obrigatório." });
     }
 
-    if (registro.expira_em < new Date()) {
-      return res.status(400).json({
-        error: "Token expirado"
-      })
+    // Verifica se a senha tem menos de 8 caracteres
+    if (senha.length < 8) {
+      return res.status(400).json({ error: 'A senha deve conter no mínimo 8 caracteres.' });
     }
 
-    const senha_hash = await bcrypt.hash(senha, 10)
+    //✅ Validação token
+    const registroToken = await prisma.tokenAtivacao.findUnique({
+      where: { token },
+    });
+
+    if (!registroToken || registroToken.usado) {
+      return res.status(400).json({ error: 'Token inválido.' });
+    } else if (registroToken.expira_em < new Date()) {
+      return res.status(400).json({ error: 'Token expirado. Tente novamente.' });
+    }
+
+    const senha_hash = await bcrypt.hash(senha, 10);
 
     await prisma.usuario.update({
-      where: {
-        id: registro.usuario_id
-      },
+      where: { id: registroToken.usuario_id },
       data: {
         senha_hash,
-        ativo: true
-      }
-    })
-
-    await prisma.tokenAtivacao.update({
-      where: {
-        id: registro.id
+        ativo: true,
       },
-      data: {
-        usado: true
-      }
-    })
+    });
 
-    return res.json({
-      message: "Conta ativada com sucesso"
-    })
-
+    // Retorno de sucesso (ajuste conforme a necessidade do seu app)
+    return res.status(200).json({ message: 'Conta ativada com sucesso!' });
   } catch (error) {
-
-    console.error(error)
-
-    return res.status(500).json({
-      error: error.message
-    })
-
+    console.error('ERRO NA ATIVAÇÃO:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
-})
+});
 
-
-// 🔑 LOGIN
-router.post("/login", async (req, res) => {
+//🔑 Login do usuário
+router.post('/login', async (req, res) => {
+  const { email, senha } = req.body;
 
   try {
-
-    const { email, senha } = req.body
-
-    if (!email || !senha) {
-      return res.status(400).json({
-        error: "Email e senha são obrigatórios"
-      })
+    //✅ Validação campos obrigatórios
+    if (!email || email.trim() === '') {
+      return res.status(400).json({ error: "O campo 'E-mail' é obrigatório." });
     }
 
-    const user = await prisma.usuario.findUnique({
-      where: {
-        email
-      },
+    if (!senha || senha.trim() === '') {
+      return res.status(400).json({ error: "O campo 'Senha' é obrigatório." });
+    }
+
+    //✅ Validação campos obrigatórios
+    const login = await prisma.usuario.findUnique({
+      where: { email },
 
       include: {
         admin: true,
         professor: true,
-        aluno: true
-      }
-    })
+        aluno: true,
+      },
+    });
 
-    if (!user) {
-      return res.status(404).json({
-        error: "Usuário não encontrado"
-      })
+    if (!login) {
+      return res.status(400).json({ error: 'E-mail inválido.' });
     }
 
-    if (!user.ativo) {
-      return res.status(403).json({
-        error: "Conta não ativada"
-      })
+    if (!login.ativo) {
+      return res.status(400).json({ error: 'Conta do usuário inativa.' });
     }
 
-    if (!user.senha_hash) {
-      return res.status(403).json({
-        error: "Senha não definida"
-      })
+    if (!login.senha_hash) {
+      return res.status(400).json({ error: 'A senha não foi definida.' });
     }
 
-    if (!user.academia_id) {
-      return res.status(400).json({
-        error: "Usuário não vinculado a academia"
-      })
+    if (!login.academia_id) {
+      return res.status(400).json({ error: 'Usuário não vinculado à academia.' });
     }
 
-    const senhaValida = await bcrypt.compare(
-      senha,
-      user.senha_hash
-    )
+    //✅ Validação da senha
+    const loginSenha = await bcrypt.compare(senha, login.senha_hash);
 
-    if (!senhaValida) {
-      return res.status(401).json({
-        error: "Senha inválida"
-      })
+    if (!loginSenha) {
+      return res.status(400).json({ error: 'Senha inválida.' });
     }
 
-    let tipo = "USER"
+    let tipo = 'USER';
 
-    if (user.admin) tipo = "ADMIN"
-    else if (user.professor) tipo = "PROFESSOR"
-    else if (user.aluno) tipo = "ALUNO"
+    if (login.admin) tipo = 'ADMIN';
+    else if (login.professor) tipo = 'PROFESSOR';
+    else if (login.aluno) tipo = 'ALUNO';
 
-    // ✅ TOKEN CORRIGIDO
+    //Correção do token
     const token = jwt.sign(
       {
-        usuario_id: user.id.toString(),
-
-        professor_id: user.professor?.id?.toString() || null,
-        aluno_id: user.aluno?.id?.toString() || null,
-        admin_id: user.admin?.id?.toString() || null,
-
-        email: user.email,
+        usuario_id: login.id.toString(),
+        admin_id: login.admin?.id?.toString() || null,
+        professor_id: login.professor?.id?.toString() || null,
+        aluno_id: login.aluno?.id?.toString() || null,
+        email: login.email,
         tipo,
-
-        academia_id: user.academia_id.toString()
+        academia_id: login.academia_id.toString(),
       },
 
       process.env.JWT_SECRET,
 
       {
-        expiresIn: "1d"
-      }
-    )
+        expiresIn: '1d',
+      },
+    );
 
     return res.json({
       token,
       tipo,
-      usuario: formatBigInt(user)
-    })
-
+      usuario: formatBigInt(login),
+    });
   } catch (error) {
-
-    console.error(error)
-
-    return res.status(500).json({
-      error: error.message
-    })
-
+    console.error(error);
+    return res.status(500).json({ error: error.message });
   }
-})
+});
 
-export default router
+export default router;

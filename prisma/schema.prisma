@@ -21,7 +21,7 @@ enum StatusAluno {
 model Usuario {
   id         BigInt   @id @default(autoincrement())
   email      String   @unique @db.VarChar(150)
-  cpf        String   @unique @db.Char(11)
+  cpf        String   @unique @db.Char(255)
   senha_hash String?  @db.VarChar(255)
   nome       String   @db.VarChar(150)
   telefone   String?  @db.VarChar(20)
@@ -68,20 +68,20 @@ model Professor {
 }
 
 model Aluno {
-  id         BigInt  @id @default(autoincrement())
-  usuario_id BigInt  @unique
-  nivel      Nivel   @default(INICIANTE)
-  pontuacao  Int     @default(0)
-  status     StatusAluno @default(ATIVO)
+  id         BigInt @id @default(autoincrement())
+  usuario_id BigInt @unique
 
-  usuario     Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  experiencia Int @default(0)
+  nivel       Int @default(1)
+  moedas      Int @default(0)
 
-  fichasTreino   FichaTreino[]
-  registros      RegistroTreino[]
-  gamificacoes   AlunoGamificacao[]
-  ranking        Ranking?
+  usuario Usuario @relation(fields: [usuario_id], references: [id])
 
-  @@map("alunos")
+  fichas            FichaTreino[]
+  registrosTreino   RegistroTreino[]
+  rankings          Ranking[]
+  conquistas        AlunoConquista[]
+  execucoes         ExecucaoFicha[]
 }
 
 model GrupoTreino {
@@ -113,6 +113,7 @@ model FichaTreino {
   grupo     GrupoTreino? @relation(fields: [grupo_id], references: [id])
 
   exercicios FichaExercicio[]
+  execucoes ExecucaoFicha[]
 
   @@map("fichas_treino")
 }
@@ -161,29 +162,6 @@ model RegistroTreino {
   @@map("registro_treino")
 }
 
-model Gamificacao {
-  id        BigInt  @id @default(autoincrement())
-  nome      String  @db.VarChar(150)
-  descricao String? @db.Text
-  pontos    Int
-
-  alunos AlunoGamificacao[]
-
-  @@map("gamificacao")
-}
-
-model AlunoGamificacao {
-  id             BigInt   @id @default(autoincrement())
-  aluno_id       BigInt
-  gamificacao_id BigInt
-  data_conquista DateTime @default(now())
-
-  aluno       Aluno       @relation(fields: [aluno_id], references: [id], onDelete: Cascade)
-  gamificacao Gamificacao @relation(fields: [gamificacao_id], references: [id], onDelete: Cascade)
-
-  @@map("aluno_gamificacao")
-}
-
 model Ranking {
   id           BigInt @id @default(autoincrement())
   aluno_id     BigInt @unique
@@ -221,7 +199,7 @@ model TokenAtivacao {
 model Academia {
   id        BigInt   @id @default(autoincrement())
   nome      String   @db.VarChar(150)
-  cnpj      String   @unique @db.VarChar(14)
+  cnpj      String   @unique @db.VarChar(255)
   endereco  String   @db.VarChar(255)
   cep       String   @db.VarChar(10)
   cidade    String   @db.VarChar(100)
@@ -232,4 +210,49 @@ model Academia {
   usuarios Usuario[]
 
   @@map("academias")
+}
+
+enum StatusExecucao {
+  EM_ANDAMENTO
+  FINALIZADA
+  CANCELADA
+}
+
+model ExecucaoFicha {
+  id             BigInt @id @default(autoincrement())
+
+  ficha_id       BigInt
+  aluno_id       BigInt
+
+  iniciado_em    DateTime @default(now())
+  finalizado_em  DateTime?
+
+  xp_ganha       Int @default(0)
+
+  status         StatusExecucao @default(EM_ANDAMENTO)
+
+  ficha          FichaTreino @relation(fields: [ficha_id], references: [id])
+  aluno          Aluno @relation(fields: [aluno_id], references: [id])
+}
+
+model Conquista {
+  id          BigInt @id @default(autoincrement())
+
+  nome        String @unique
+  descricao   String
+  xp_bonus    Int @default(0)
+
+  alunos      AlunoConquista[]
+}
+
+model AlunoConquista {
+  aluno_id      BigInt
+  conquista_id  BigInt
+
+  recebido_em   DateTime @default(now())
+
+  aluno         Aluno @relation(fields: [aluno_id], references: [id])
+  conquista     Conquista @relation(fields: [conquista_id], references: [id])
+
+  @@id([aluno_id, conquista_id])
 }
