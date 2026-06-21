@@ -3,8 +3,9 @@ import { cnpj as cnpjValidator, cpf as cpfValidator } from 'cpf-cnpj-validator';
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const prisma = new PrismaClient();
+const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; //formato "usuario@dominio.com"
+const regexSenha = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/; //min de 8 caracteres, com 1 letra e 1 número
 const router = express.Router();
 
 //Função para tratar BigInt
@@ -34,49 +35,46 @@ router.post('/', async (req, res) => {
       senha,
     } = req.body;
 
-    //✅ Validação básica
-    if (!nomeAcademia || nomeAcademia.trim() === '') {
+    //1. Fazer a validação básica
+    if (!nomeAcademia?.trim()) {
       return res.status(400).json({ error: "O campo 'Nome Fantasia' é obrigatório." });
     }
 
-    // Corrigido para usar o validador renomeado
     if (!cnpjValidator.isValid(cnpj)) {
       return res.status(400).json({ error: 'CNPJ inválido.' });
     }
 
-    if (!nome || nome.trim() === '') {
+    if (!nome?.trim()) {
       return res.status(400).json({ error: "O campo 'Nome' é obrigatório." });
     }
 
-    if (!email || email.trim() === '') {
+    if (!email?.trim()) {
       return res.status(400).json({ error: "O campo 'E-mail' é obrigatório." });
-    } else if (!emailRegex.test(email)) {
+    } else if (!regexEmail.test(email)) {
       return res.status(400).json({ error: "Campo 'E-mail inválido." });
     }
 
-    // Corrigido para usar o validador renomeado
     if (!cpfValidator.isValid(cpf)) {
       return res.status(400).json({ error: 'CPF inválido.' });
     }
 
-    // Corrigido de .lenght para .length
-    if (!senha || senha.length < 8) {
-      return res.status(400).json({ error: 'A senha tem que ter no mínimo 8 caracteres.' });
+    if (!senha?.trim()) {
+      return res.status(400).json({ error: "O campo 'Senha' é obrigatório." });
+    } else if (!regexSenha.test(senha)) {
+      return res.status(400).json({ error: 'Senha inválida.' });
     }
 
-    //✅ Verificar se sistema já foi inicializado
+    //2. Verificar se o sistema já foi inicializado
     const adminExiste = await prisma.admin.findFirst();
 
     if (adminExiste) {
       return res.status(400).json({ error: 'O sistema já foi inicializado.' });
     }
 
-    //🔒 Hash da senha
-    const senha_hash = await bcrypt.hash(senha, 10);
+    const senha_hash = await bcrypt.hash(senha, 10); //🔒 Gerar o hash da senha
 
-    //✅ Iniciar uma transação
+    //3. Iniciar uma transação (confirmar as alterações ou desfazer tudo caso dê erro)
     const resultadoTransacao = await prisma.$transaction(async (tx) => {
-      // Alterado o nome da constante para 'novaAcademia'
       const novaAcademia = await tx.academia.create({
         data: {
           nome: nomeAcademia,
@@ -88,7 +86,7 @@ router.post('/', async (req, res) => {
         },
       });
 
-      const usuario = await tx.usuario.create({
+      const novoAdmin = await tx.usuario.create({
         data: {
           nome: `${nome} ${sobrenome}`,
           email,
@@ -96,17 +94,17 @@ router.post('/', async (req, res) => {
           telefone,
           senha_hash,
           ativo: true,
-          academia_id: novaAcademia.id, // Corrigido para pegar de novaAcademia
+          academia_id: novaAcademia.id,
         },
       });
 
       await tx.admin.create({
         data: {
-          usuario_id: usuario.id,
+          usuario_id: novoAdmin.id,
         },
       });
 
-      return { usuario, academia: novaAcademia }; // Corrigido aqui também
+      return { usuario: novoAdmin, academia: novaAcademia };
     });
 
     return res.status(201).json({
@@ -115,8 +113,8 @@ router.post('/', async (req, res) => {
       academia: formatBigInt(resultadoTransacao.academia),
     });
   } catch (error) {
-    console.error(error); // Fique de olho no seu terminal/console para ver os detalhes se algo mais falhar!
-    return res.status(500).json({ error: 'Erro ao inicializar sistema' });
+    console.error('Erro ao inicializar sistema:', error);
+    return res.status(500).json({ error: 'Falha interna na inicialização do sistema.' });
   }
 });
 

@@ -4,58 +4,60 @@ import prisma from '../../prisma/client.js';
 
 const router = express.Router();
 
-//Funcção para tratar BigInt
+//Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
 //Criar grupo
-router.post('/', auth, async (res, req) => {
+router.post('/', auth, async (req, res) => {
   try {
     const professor_id = req.usuario.professor_id;
     const { nome, descricao, nivel } = req.body;
 
-    //1. Validação básica dos campos obrigatórios
-    if (!nome || nome.trim() === '') {
+    //1. Fazer a validação básica dos campos obrigatórios
+    if (!nome?.trim()) {
       return res
         .statusCode(400)
         .json({ error: "O campo 'Grupo de Treino' é um campo obrigatório" });
     }
 
-    //2. Verificação de duplicidade
+    //2. Verificar a existência do grupo de treino
     const grupoExistente = await prisma.grupoTreino.findFirst({
       where: { nome: { equals: nome.trim() } },
     });
 
     if (grupoExistente) {
-      return res.statusCode(409).json({ error: 'Já existe um grupo cadastrado com esse nome' });
+      return res.status(409).json({ error: 'Já existe um grupo cadastrado com esse nome' });
     }
 
-    //3. Criação do grupo de treino caso passe na validação
+    //3. Criar o grupo de treino
     const grupoTreino = await prisma.grupoTreino.create({
       data: {
         nome: nome.trim(),
         descricao,
         nivel,
-        criado_por: professor_id,
+        professor: {
+          connect: { id: professor_id },
+        },
       },
     });
 
-    return res.statusCode(201).json(grupoTreino);
+    return res.status(201).json(grupoTreino);
   } catch (error) {
-    console.error('Erro ao criar grupo de treino:', error); // Log para você debugar no servidor
-    return res.status(500).json({ error: 'Erro interno do servidor ao criar o grupo de treino.' });
+    console.error('Erro ao criar grupo de treino:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
 //Listar todos os grupos de treino (com opção de filtrar por nível)
 router.get('/nivel/', auth, async (req, res) => {
   try {
-    //1. Captura o nível dos parâmetros da URL
+    //1. Capturar o nível dos parâmetros da URL
     const { nivel } = req.query;
 
-    //2. Cria o objeto de condições para a busca
+    //2. Criar o objeto de condições para a busca
     const onde = {};
 
     //2.1. Se o filtro foi enviado na URL, adiciona ele na busca de forma inteligente
@@ -63,7 +65,7 @@ router.get('/nivel/', auth, async (req, res) => {
       onde.nivel = { equals: nivel.trim() };
     }
 
-    //3. Executa a busca no Prisma aplicando o filtro (se houver)
+    //3. ExecutaR a busca no Prisma aplicando o filtro (se houver)
     const grupoTreino = await prisma.grupoTreino.findMany({
       where: onde,
       orderBy: {
@@ -73,8 +75,8 @@ router.get('/nivel/', auth, async (req, res) => {
 
     return res.json(grupoTreino);
   } catch (error) {
-    console.error('Erro ao listar grupos de treino:', error); // Log interno para debug
-    return res.status(500).json({ error: 'Erro interno do servidor ao listar grupos de treino.' });
+    console.error('Erro ao listar grupo de treino:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -83,16 +85,15 @@ router.get('/', auth, async (req, res) => {
   try {
     const { id, nome } = req.query;
 
-    // 1. Busca por ID (se o ID for fornecido via Query Params)
+    // 1. Buscar por ID
     if (id) {
-      // Correção de sintaxe no if e conversão para número (se o seu ID no banco for Int)
       if (isNaN(Number(id))) {
         return res.status(400).json({ error: 'O ID fornecido é inválido.' });
       }
 
       const grupoTreinoPorId = await prisma.grupoTreino.findUnique({
         where: {
-          grupoTreino_id: Number(id), // Ajuste para Int se necessário, ou mantenha String se for UUID
+          grupoTreino_id: Number(id),
         },
       });
 
@@ -103,7 +104,7 @@ router.get('/', auth, async (req, res) => {
       return res.status(200).json(grupoTreinoPorId);
     }
 
-    // 2. Buscar por nome
+    //2. Buscar por nome
     if (nome && String(nome).trim() !== '') {
       const grupoTreinoPorNome = await prisma.grupoTreino.findMany({
         where: {
@@ -116,13 +117,12 @@ router.get('/', auth, async (req, res) => {
       return res.status(200).json(grupoTreinoPorNome);
     }
 
-    // 3. Se não passou nem ID nem Nome
     return res
       .status(400)
       .json({ error: 'Informe um ID ou um Nome válido para realizar a busca.' });
   } catch (error) {
-    console.error('ERRO DETALHADO NA BUSCA:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.', detalhe: error.message });
+    console.error('Erro ao buscar grupo de treino:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -143,7 +143,7 @@ router.patch('/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Grupo treino não encontrado.' });
     }
 
-    //2. Objeto dinâmico com os campos que serão atualizados na tabela Exercicio
+    //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
     const dadosParaAtualizar = {};
 
     if (nome !== undefined) {
@@ -156,12 +156,12 @@ router.patch('/:id', auth, async (req, res) => {
     if (descricao !== undefined) dadosParaAtualizar.descricao = descricao;
     if (nivel !== undefined) dadosParaAtualizar.nivel = nivel;
 
-    // Se o corpo veio vazio e nenhum campo válido foi mapeado
+    //2.1. Se o corpo veio vazio e nenhum campo válido foi mapeado
     if (Object.keys(dadosParaAtualizar).length === 0) {
       return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
     }
 
-    //4. Executar a atualização no banco de dados
+    //3. Executar a atualização no banco de dados
     const grupoTreinoAtualizado = await prisma.grupoTreino.update({
       where: { id: BigInt(id) },
       data: dadosParaAtualizar,
@@ -172,8 +172,8 @@ router.patch('/:id', auth, async (req, res) => {
       exercicio: formatBigInt(exercicioAtualizado),
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro interno ao atualizar grupo de treino.' });
+    console.error('Erro ao atualizar grupo de treino:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -200,8 +200,8 @@ router.delete('/:id', async (req, res) => {
       message: 'Grupo de treino excluído com sucesso',
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: error.message });
+    console.error('Erro ao excluir grupo de treino:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 

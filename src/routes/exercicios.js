@@ -16,12 +16,12 @@ router.post('/', auth, async (req, res) => {
     const professor_id = req.usuario.professor_id;
     const { nome, descricao, grupo_muscular } = req.body;
 
-    // 1. Validação básica dos campos obrigatórios
-    if (!nome || !grupo_muscular) {
+    // 1. Fazer a validação básica
+    if (!nome?.trim() || !grupo_muscular?.trim()) {
       return res.status(400).json({ error: 'Nome e grupo muscular são obrigatórios.' });
     }
 
-    // 2. Verificação de duplicidade
+    //2. Verificar se o exercício já existe
     const exercicioExistente = await prisma.exercicio.findFirst({
       where: {
         nome: {
@@ -34,51 +34,53 @@ router.post('/', auth, async (req, res) => {
       return res.status(409).json({ error: 'Já existe um exercício cadastrado com esse nome.' });
     }
 
-    // 3. Criação do exercício caso passe na validação
+    //3. Criar o exercício
     const exercicio = await prisma.exercicio.create({
       data: {
-        nome: nome.trim(), // Remove espaços extras no início e fim
+        nome: nome.trim(),
         descricao,
         grupo_muscular,
-        criado_por: professor_id,
+        professor: {
+          connect: { id: professor_id },
+        },
       },
     });
 
     return res.status(201).json(exercicio);
   } catch (error) {
-    console.error('Erro ao criar exercício:', error); // Log para você debugar no servidor
-    return res.status(500).json({ error: 'Erro interno do servidor ao criar o exercício.' });
+    console.error('Erro ao criar exercício:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
 //Listar todos os exercícios (com opção de filtrar por grupo muscular)
 router.get('/grupo-muscular/', auth, async (req, res) => {
   try {
-    // 1. Captura o grupo muscular dos parâmetros da URL (Ex: /exercicios?grupo_muscular=Pernas)
+    //1. Capturar o grupo muscular dos parâmetros da URL (Ex: /exercicios?grupo_muscular=Pernas)
     const { grupo_muscular } = req.query;
 
-    // 2. Cria o objeto de condições para a busca
+    //2. Criar o objeto de condições para a busca
     const onde = {};
 
-    // Se o filtro foi enviado na URL, adiciona ele na busca de forma inteligente
+    //2.1. Se o filtro foi enviado na URL, adiciona ele na busca de forma inteligente
     if (grupo_muscular) {
       onde.grupo_muscular = {
         equals: grupo_muscular.trim(),
       };
     }
 
-    // 3. Executa a busca no Prisma aplicando o filtro (se houver)
+    //3. Executar a busca no Prisma aplicando o filtro (se houver)
     const exercicios = await prisma.exercicio.findMany({
       where: onde,
       orderBy: {
-        nome: 'asc', // Opcional: já traz a lista em ordem alfabética para facilitar a vida do front-end
+        nome: 'asc',
       },
     });
 
     return res.json(exercicios);
   } catch (error) {
-    console.error('Erro ao listar exercícios:', error); // Log interno para debug
-    return res.status(500).json({ error: 'Erro interno do servidor ao listar exercícios.' });
+    console.error('Erro ao listar exercícios:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -87,16 +89,15 @@ router.get('/', auth, async (req, res) => {
   try {
     const { id, nome } = req.query;
 
-    // 1. Busca por ID (se o ID for fornecido via Query Params)
+    //1. Buscar por ID (se o ID for fornecido via Query Params)
     if (id) {
-      // Correção de sintaxe no if e conversão para número (se o seu ID no banco for Int)
       if (isNaN(Number(id))) {
         return res.status(400).json({ error: 'O ID fornecido é inválido.' });
       }
 
       const exercicioPorId = await prisma.exercicio.findUnique({
         where: {
-          exercicio_id: Number(id), // Ajuste para Int se necessário, ou mantenha String se for UUID
+          id: BigInt(id),
         },
       });
 
@@ -107,7 +108,7 @@ router.get('/', auth, async (req, res) => {
       return res.status(200).json(exercicioPorId);
     }
 
-    // 2. Buscar por nome
+    //2. Buscar por nome
     if (nome && String(nome).trim() !== '') {
       const exerciciosPorNome = await prisma.exercicio.findMany({
         where: {
@@ -120,13 +121,12 @@ router.get('/', auth, async (req, res) => {
       return res.status(200).json(exerciciosPorNome);
     }
 
-    // 3. Se não passou nem ID nem Nome
     return res
       .status(400)
       .json({ error: 'Informe um ID ou um Nome válido para realizar a busca.' });
   } catch (error) {
-    console.error('ERRO DETALHADO NA BUSCA:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.', detalhe: error.message });
+    console.error('Erro ao buscar exercício:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
@@ -147,25 +147,19 @@ router.patch('/:id', auth, async (req, res) => {
       return res.status(404).json({ error: 'Exercício não encontrado.' });
     }
 
-    //2. Objeto dinâmico com os campos que serão atualizados na tabela Exercicio
+    //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
     const dadosParaAtualizar = {};
 
-    if (nome !== undefined) {
-      if (nome.trim() === '') {
-        return res.status(400).json({ error: "O campo 'Nome' não pode ser vazio." });
-      }
-      dadosParaAtualizar.nome = nome;
-    }
-
+    if (nome !== undefined) dadosParaAtualizar.nome = nome;
     if (descricao !== undefined) dadosParaAtualizar.descricao = descricao;
     if (grupo_muscular !== undefined) dadosParaAtualizar.grupo_muscular = grupo_muscular;
 
-    // Se o corpo veio vazio e nenhum campo válido foi mapeado
+    //2.1 Se o corpo veio vazio e nenhum campo válido foi mapeado
     if (Object.keys(dadosParaAtualizar).length === 0) {
       return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
     }
 
-    //4. Executar a atualização no banco de dados
+    //3. Executar a atualização no banco de dados
     const exercicioAtualizado = await prisma.exercicio.update({
       where: { id: BigInt(id) },
       data: dadosParaAtualizar,
@@ -176,26 +170,29 @@ router.patch('/:id', auth, async (req, res) => {
       exercicio: formatBigInt(exercicioAtualizado),
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro interno ao atualizar exercício.' });
+    console.error('Erro ao atualizar o exercício:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
 //Excluir exercício
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
+    //1. Buscar o exercício
     const exercicioExiste = await prisma.exercicio.findUnique({
       where: { id: BigInt(id) },
     });
 
+    //1.1. Se o exercício não existir
     if (!exercicioExiste) {
       return res.status(404).json({
         error: 'Exercício não encontrado.',
       });
     }
 
+    //2. Deletar o exercício
     await prisma.exercicio.delete({
       where: { id: BigInt(id) },
     });
@@ -204,16 +201,15 @@ router.delete('/:id', async (req, res) => {
       message: 'Exercício excluído com sucesso',
     });
   } catch (error) {
-    console.error(error);
+    console.error('Erro ao excluir o exercício:', error);
 
-    // erro comum: exercício vinculado a ficha
     if (error.code === 'P2003') {
       return res.status(400).json({
         error: 'Não é possível deletar: exercício já está em uso em fichas.',
       });
     }
 
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
