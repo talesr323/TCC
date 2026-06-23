@@ -18,18 +18,19 @@ router.post('/', auth, async (req, res) => {
 
     //1. Fazer a validação básica dos campos obrigatórios
     if (!nome?.trim()) {
-      return res
-        .statusCode(400)
-        .json({ error: "O campo 'Grupo de Treino' é um campo obrigatório" });
+      return res.statusCode(400).json({ error: "O campo 'Grupo de Treino' é obrigatório" });
     }
 
     //2. Verificar a existência do grupo de treino
-    const grupoExistente = await prisma.grupoTreino.findFirst({
+    const grupoTreinoExiste = await prisma.grupoTreino.findFirst({
       where: { nome: { equals: nome.trim() } },
     });
 
-    if (grupoExistente) {
-      return res.status(409).json({ error: 'Já existe um grupo cadastrado com esse nome' });
+    if (grupoExiste) {
+      return res.status(409).json({
+        error: 'Falha no cadastro.',
+        message: 'Já existe um grupo de treino cadastrado com esse nome.',
+      });
     }
 
     //3. Criar o grupo de treino
@@ -46,8 +47,11 @@ router.post('/', auth, async (req, res) => {
 
     return res.status(201).json(grupoTreino);
   } catch (error) {
-    console.error('Erro ao criar grupo de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao cadastrar grupo de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -75,36 +79,20 @@ router.get('/nivel/', auth, async (req, res) => {
 
     return res.json(grupoTreino);
   } catch (error) {
-    console.error('Erro ao listar grupo de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro no sistema.',
+      message: error.message,
+    });
   }
 });
 
-// Buscar exercício por id ou por nome
+// Buscar exercício por nome
 router.get('/', auth, async (req, res) => {
   try {
-    const { id, nome } = req.query;
+    const { nome } = req.query;
 
-    // 1. Buscar por ID
-    if (id) {
-      if (isNaN(Number(id))) {
-        return res.status(400).json({ error: 'O ID fornecido é inválido.' });
-      }
-
-      const grupoTreinoPorId = await prisma.grupoTreino.findUnique({
-        where: {
-          grupoTreino_id: Number(id),
-        },
-      });
-
-      if (!grupoTreinoPorId) {
-        return res.status(404).json({ error: 'Grupo treino não encontrado.' });
-      }
-
-      return res.status(200).json(grupoTreinoPorId);
-    }
-
-    //2. Buscar por nome
+    //1. Buscar por nome
     if (nome && String(nome).trim() !== '') {
       const grupoTreinoPorNome = await prisma.grupoTreino.findMany({
         where: {
@@ -114,15 +102,21 @@ router.get('/', auth, async (req, res) => {
         },
       });
 
+      if (!grupoTreinoPorNome) {
+        return res.status(404).json({
+          error: 'Erro no sistema.',
+          message: 'O grupo de treino não existe.',
+        });
+      }
+
       return res.status(200).json(grupoTreinoPorNome);
     }
-
-    return res
-      .status(400)
-      .json({ error: 'Informe um ID ou um Nome válido para realizar a busca.' });
   } catch (error) {
-    console.error('Erro ao buscar grupo de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar grupo de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -133,38 +127,30 @@ router.patch('/:id', auth, async (req, res) => {
     const { nome, descricao, nivel } = req.body;
 
     //1. Verificar se o grupo de treino existe
-    const grupoTreinoExistente = await prisma.grupoTreino.findFirst({
+    const grupoTreinoExiste = await prisma.grupoTreino.findFirst({
       where: {
         id: BigInt(id),
       },
     });
 
-    if (!grupoTreinoExistente) {
-      return res.status(404).json({ error: 'Grupo treino não encontrado.' });
+    if (!grupoTreinoExiste) {
+      return res.status(404).json({
+        error: 'Alteração negada.',
+        message: 'Grupo treino não encontrado.',
+      });
     }
 
     //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
-    const dadosParaAtualizar = {};
+    const dadosGrupoTreino = {};
 
-    if (nome !== undefined) {
-      if (nome.trim() === '') {
-        return res.status(400).json({ error: "O campo 'Nome' não pode ser vazio." });
-      }
-      dadosParaAtualizar.nome = nome;
-    }
-
-    if (descricao !== undefined) dadosParaAtualizar.descricao = descricao;
-    if (nivel !== undefined) dadosParaAtualizar.nivel = nivel;
-
-    //2.1. Se o corpo veio vazio e nenhum campo válido foi mapeado
-    if (Object.keys(dadosParaAtualizar).length === 0) {
-      return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
-    }
+    if (nome !== undefined) dadosGrupoTreino.nome = nome;
+    if (descricao !== undefined) dadosGrupoTreino.descricao = descricao;
+    if (nivel !== undefined) dadosGrupoTreino.nivel = nivel;
 
     //3. Executar a atualização no banco de dados
     const grupoTreinoAtualizado = await prisma.grupoTreino.update({
       where: { id: BigInt(id) },
-      data: dadosParaAtualizar,
+      data: dadosGrupoTreino,
     });
 
     return res.status(200).json({
@@ -172,8 +158,11 @@ router.patch('/:id', auth, async (req, res) => {
       exercicio: formatBigInt(exercicioAtualizado),
     });
   } catch (error) {
-    console.error('Erro ao atualizar grupo de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao atualizar grupo de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -201,7 +190,7 @@ router.delete('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Erro ao excluir grupo de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    return res.status(500).json({ error: error.message });
   }
 });
 

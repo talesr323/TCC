@@ -13,31 +13,52 @@ const formatBigInt = (data) =>
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
-//🔓 Ativar conta
+//Ativar conta
 router.post('/ativacao-conta', async (req, res) => {
   try {
-    const { token, senha } = req.body;
+    const { tokenAtivacao, senha } = req.body;
 
-    //1. Fazer a validação básica
-    if (!token?.trim()) {
-      return res.status(400).json({ error: "O campo 'Token' é obrigatório." });
+    //1. Fazer a validação básica (verificar se o campo obrigatório foi preenchido)
+    const validacaoBasica = [
+      { valor: tokenAtivacao, campoNome: 'Token de Ativação' },
+      { valor: senha, campoNome: 'Senha' },
+    ];
+
+    const campoVazio = validacaoBasica.find((campo) => {
+      if (typeof campo.valor === 'string') return !campo.valor.trim();
+    });
+
+    if (campoVazio) {
+      return res.status(400).json({
+        error: 'Falha na ativação.',
+        message: `O campo "${campoVazio.nome}" é obrigatório.`,
+      });
     }
 
-    if (!senha?.trim()) {
-      return res.status(400).json({ error: "O campo 'Senha' é obrigatório." });
-    } else if (!regexSenha.test(senha)) {
-      return res.status(400).json({ error: 'Senha inválida.' });
-    }
-
-    //2. Fazer a validação do token
+    //2. Fazer a validação do token de ativação
     const registroToken = await prisma.tokenAtivacao.findUnique({
       where: { token },
     });
 
     if (!registroToken || registroToken.usado) {
-      return res.status(400).json({ error: 'Token inválido.' });
+      return res.status(400).json({
+        error: 'Falha na validação do token.',
+        message: 'Token de autenticação inválido ou corrompido.',
+      });
     } else if (registroToken.expira_em < new Date()) {
-      return res.status(400).json({ error: 'Token expirado. Tente novamente.' });
+      return res.status(400).json({
+        error: 'Falha na validação do token.',
+        message: 'O token fornecido expirou. Por favor, tente novamente',
+        expiredAt: error.expiredAt,
+      });
+    }
+
+    //3. Fazer a validação da senha cadastrada
+    if (!regexSenha.test(senha)) {
+      return res.status(400).json({
+        error: 'Falha na validação da senha cadastrada.',
+        message: 'Senha não atende aos requisitos de segurança.',
+      });
     }
 
     const senha_hash = await bcrypt.hash(senha, 10);
@@ -52,19 +73,32 @@ router.post('/ativacao-conta', async (req, res) => {
 
     return res.status(200).json({ message: 'Conta ativada com sucesso!' });
   } catch (error) {
-    console.error('Erro ao ativar a conta:', error);
-    return res.status(500).json({ error: 'Falha na ativação da conta. Tente novamente.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao ativar conta.',
+      message: error.message,
+    });
   }
 });
 
-//🔑 Login do usuário
+//Login do usuário
 router.post('/login', async (req, res) => {
   const { email, senha } = req.body;
 
   try {
     //1. Fazer a validação básica
-    if (!email?.trim() || !senha?.trim()) {
-      return res.status(400).json({ error: "Os campos 'Email' e 'Senha' são obrigatórios." });
+    const camposValidacao = [
+      { valor: email, campoNome: 'E-mail' },
+      { valor: senha, campoNome: 'Senha' },
+    ];
+
+    const campoVazio = camposValidacao.find((campo) => !campo.valor?.trim());
+
+    if (campoVazio) {
+      return res.status(400).json({
+        error: 'Falha no login.',
+        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
     }
 
     //2. Fazer a busca do usuário
@@ -76,7 +110,10 @@ router.post('/login', async (req, res) => {
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
 
     if (!usuario || !senhaValida) {
-      return res.status(401).json({ error: 'E-mail ou senha inválidos. Tente novamente.' });
+      return res.status(400).json({
+        error: 'Login negado.',
+        message: 'Credenciais inválidas. Tente novamente.',
+      });
     }
 
     //4. Fazer a descoberta dinâmica do tipo de usuário (admin, aluno ou professor)
@@ -104,15 +141,16 @@ router.post('/login', async (req, res) => {
     //5. Gerar o Token JWT
     const tokenPayload = {
       usuario_id: usuario.id.toString(),
-      admin_id: tipo === 'ADMIN' ? papelId?.toString() : null,
-      professor_id: tipo === 'PROFESSOR' ? papelId?.toString() : null,
-      aluno_id: tipo === 'ALUNO' ? papelId?.toString() : null,
       email: usuario.email,
-      tipo,
       academia_id: usuario.academia_id.toString(),
+      [`${tipo.toLowerCase()}_id`]: papelId?.toString() || null, //Cria dinamicamente a propriedade
     };
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1d' });
+    ['admin_id', 'professor_id', 'aluno_id'].forEach((key) => {
+      if (!(key in tokenPayload)) tokenPayload[key] = null; //Garante que as outras chaves de ID existam como null
+    });
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     //6. Obter resposta de sucesso
     return res.json({
@@ -121,8 +159,11 @@ router.post('/login', async (req, res) => {
       usuario: formatBigInt(usuario),
     });
   } catch (error) {
-    console.error('Erro no login:', error);
-    return res.status(500).json({ error: 'Falha interna no login.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro no login.',
+      message: error.message,
+    });
   }
 });
 

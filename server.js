@@ -3,15 +3,15 @@ dotenv.config();
 
 import express from 'express';
 
-import adminRoutes from './src/routes/admin.js';
-import authRoutes from './src/routes/auth.js';
-import conquistasRoutes from './src/routes/conquistas.js';
-import executaFichaRoutes from './src/routes/executaFicha.js';
-import exerciciosRoutes from './src/routes/exercicios.js';
-import fichasRoutes from './src/routes/fichas.js';
-import gruposRoutes from './src/routes/grupos.js';
-import rankingRoutes from './src/routes/ranking.js';
-import usuariosRoutes from './src/routes/usuarios.js';
+import adminRoute from './src/routes/adminRoute.js';
+import authRoute from './src/routes/authRoute.js';
+import conquistasRoute from './src/routes/conquistasRoute.js';
+import exerciciosRoute from './src/routes/exerciciosRoute.js';
+import fichaExecucaoRoute from './src/routes/fichaExecucaoRoute.js';
+import fichasRoute from './src/routes/fichasRoute.js';
+import gruposTreinoRoute from './src/routes/gruposTreinoRoute.js';
+import rankingRoute from './src/routes/rankingRoute.js';
+import usuariosRoute from './src/routes/usuariosRoute.js';
 
 import auth from './src/middlewares/auth.js'; //Importante
 
@@ -23,27 +23,20 @@ const app = express();
 
 app.use(express.json());
 
-// =======================
-// 🔓 ROTAS PÚBLICAS
-// =======================
-app.use('/admin', adminRoutes); // setup inicial (SEM TOKEN)
-app.use('/auth', authRoutes); // login (SEM TOKEN)
+//Rotas Públicas
+app.use('/admin', adminRoute); //Inicialização do aplicativo (sem token)
+app.use('/auth', authRoute); // Login (sem token)
 
-// =======================
-// 🔒 MIDDLEWARE GLOBAL
-// =======================
-app.use(auth); // 🔥 AQUI começa a proteção
+app.use(auth); //proteção
 
-// =======================
-// 🔒 ROTAS PROTEGIDAS
-// =======================
-app.use('/conquistas', conquistasRoutes);
-app.use('/execucao-ficha', executaFichaRoutes);
-app.use('/exercicios', exerciciosRoutes);
-app.use('/fichas', fichasRoutes);
-app.use('/grupos', gruposRoutes);
-app.use('/ranking', rankingRoutes);
-app.use('/usuarios', usuariosRoutes);
+//Rotas Protegidas
+app.use('/conquistas', conquistasRoute);
+app.use('/exercicios', exerciciosRoute);
+app.use('/ficha-execucao', fichaExecucaoRoute);
+app.use('/fichas', fichasRoute);
+app.use('/grupos-treino', gruposTeinoRoute);
+app.use('/ranking', rankingRoute);
+app.use('/usuarios', usuariosRoute);
 
 app.listen(3001, '0.0.0.0', () => {
   console.log('Servidor rodando na porta 3001');

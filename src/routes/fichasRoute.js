@@ -17,16 +17,18 @@ router.post('/', auth, async (req, res) => {
     const { nome, aluno_id, grupo_id, data_inicio, data_fim, exercicios } = req.body;
 
     //1. Fazer a validação básica dos campos obrigatórios
-    if (!nome || nome.trim() === '') {
-      return res.status(400).json({ error: 'Nome e grupo muscular são obrigatórios.' });
+    if (!nome?.trim()) {
+      return res.status(400).json({ error: "O campo 'Nome' é obrigatório." });
     }
 
     if (!exercicios || !Array.isArray(exercicios) || exercicios.length === 0) {
-      return res.status(400).json({ error: 'A ficha deve conter pelo menos um exercício.' }); //Obriga o usuário a adicionar pelo menos um exercício na ficha
+      return res
+        .status(400)
+        .json({ error: 'A ficha de treino deve conter pelo menos um exercício.' }); //Obriga o usuário a adicionar pelo menos um exercício na ficha
     }
 
     //2. Criar a ficha de treino
-    const ficha = await prisma.fichaTreino.create({
+    const novaFicha = await prisma.fichaTreino.create({
       data: {
         nome,
         aluno_id: aluno_id ? BigInt(aluno_id) : null,
@@ -55,10 +57,13 @@ router.post('/', auth, async (req, res) => {
       },
     });
 
-    res.status(201).json(formatBigInt(ficha));
+    res.status(201).json(formatBigInt(novaFicha));
   } catch (error) {
-    console.error('Erro ao criar a ficha de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao cadastrar ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -68,7 +73,7 @@ router.get('/nivel/', auth, async (req, res) => {
     const professor_id = req.usuario.professor_id;
     const { nivel } = req.query;
 
-    const fichas = await prisma.fichaTreino.findMany({
+    const fichasTreino = await prisma.fichaTreino.findMany({
       where: {
         professor_id,
         ...(nivel && {
@@ -89,40 +94,24 @@ router.get('/nivel/', auth, async (req, res) => {
       },
     });
 
-    res.json(fichas);
+    res.json(fichasTreino);
   } catch (error) {
-    console.error('Erro ao buscar a ficha de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro no sistema.',
+      message: error.message,
+    });
   }
 });
 
 //Buscar a ficha de treino por id ou por nome
 router.get('/', auth, async (req, res) => {
   try {
-    const { id, nome } = req.query;
-
-    //1. Buscar por id
-    if (id) {
-      if (isNaN(Number(id))) {
-        return res.status(400).json({ error: 'O ID fornecido é inválido.' });
-      }
-
-      const fichaPorId = await prisma.fichaTreino.findUnique({
-        where: {
-          ficha_id: Number(id),
-        },
-      });
-
-      if (!fichaPorId) {
-        return res.status(404).json({ error: 'Ficha de treino não encontrado.' });
-      }
-
-      return res.status(200).json(fichaPorIdPorId);
-    }
+    const { nome } = req.query;
 
     //2. Buscar por nome
     if (nome && String(nome).trim() !== '') {
-      const fichasPorNome = await prisma.fichaTreino.findMany({
+      const fichasTreinoPorNome = await prisma.fichaTreino.findMany({
         where: {
           nome: {
             contains: String(nome),
@@ -130,16 +119,18 @@ router.get('/', auth, async (req, res) => {
         },
       });
 
-      return res.status(200).json(fichasPorNome);
-    }
+      if (!fichasTreinoPorNome) {
+        return res.status(404).json({ error: 'Ficha de treino não encontrada.' });
+      }
 
-    // 3. Se não passou nem ID nem Nome
-    return res
-      .status(400)
-      .json({ error: 'Informe um ID ou um Nome válido para realizar a busca.' });
+      return res.status(200).json(fichasTreinoPorNome);
+    }
   } catch (error) {
-    console.error('Erro ao buscar a ficha de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -150,11 +141,14 @@ router.get('/aluno/:id', auth, async (req, res) => {
 
     //1. Validar se o ID enviado é um número válido antes de converter para BigInt
     if (isNaN(Number(aluno_id))) {
-      return res.status(400).json({ error: 'O ID do aluno fornecido é inválido.' });
+      return res.status(400).json({
+        error: 'Erro no sistema.',
+        message: 'O ID do aluno é inválido.',
+      });
     }
 
     //2. Buscar todas as fichas associadas ao aluno_id
-    const fichasDoAluno = await prisma.fichaTreino.findMany({
+    const fichasTreinoDoAluno = await prisma.fichaTreino.findMany({
       where: {
         aluno_id: BigInt(aluno_id),
       },
@@ -168,10 +162,13 @@ router.get('/aluno/:id', auth, async (req, res) => {
       },
     });
 
-    return res.status(200).json(fichasDoAluno);
+    return res.status(200).json(fichasTreinoDoAluno);
   } catch (error) {
-    console.error('Erro ao buscar a ficha de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -182,42 +179,40 @@ router.patch('/:id', auth, async (req, res) => {
     const { nome, grupo_id, data_inicio, data_fim } = req.body;
 
     //1. Verificar se o exercício existe
-    const fichaExistente = await prisma.fichaTreino.findFirst({
+    const fichaTreinoExiste = await prisma.fichaTreino.findFirst({
       where: {
         id: BigInt(id),
       },
     });
 
-    if (!fichaExistente) {
-      return res.status(404).json({ error: 'Ficha não encontrado.' });
+    if (!fichaTreinoExiste) {
+      return res.status(404).json({ error: 'Ficha de treino não encontrada.' });
     }
 
     //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
-    const dadosParaAtualizar = {};
+    const dadosFichaTreino = {};
 
-    if (nome !== undefined) dadosParaAtualizar.nome = nome;
-    if (grupo_id !== undefined) dadosParaAtualizar.grupo_id = grupo_id;
-    if (data_inicio !== undefined) dadosParaAtualizar.data_inicio = data_inicio;
-    if (data_fim !== undefined) dadosParaAtualizar.data_fim = data_fim;
-
-    //2.1. Se o corpo veio vazio e nenhum campo válido foi mapeado
-    if (Object.keys(dadosParaAtualizar).length === 0) {
-      return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
-    }
+    if (nome !== undefined) dadosFichaTreino.nome = nome;
+    if (grupo_id !== undefined) dadosFichaTreino.grupo_id = grupo_id;
+    if (data_inicio !== undefined) dadosFichaTreino.data_inicio = data_inicio;
+    if (data_fim !== undefined) dadosFichaTreino.data_fim = data_fim;
 
     //3. Executar a atualização no banco de dados
-    const fichaAtualizado = await prisma.fichaTreino.update({
+    const fichaTreinoAtualizada = await prisma.fichaTreino.update({
       where: { id: BigInt(id) },
-      data: dadosParaAtualizar,
+      data: dadosFichaTreino,
     });
 
     return res.status(200).json({
-      message: 'Ficha de treino atualizados com sucesso.',
-      exercicio: formatBigInt(fichaAtualizado),
+      message: 'Ficha de treino atualizada com sucesso.',
+      exercicio: formatBigInt(fichaTreinoAtualizada),
     });
   } catch (error) {
-    console.error('Erro ao atualizar a ficha de treino:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao atualizar ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -238,7 +233,7 @@ router.post('/:id/exercicios', auth, async (req, res) => {
     }
 
     //2. Adicionar o exercício
-    const item = await prisma.fichaExercicio.create({
+    const exercicio = await prisma.fichaExercicio.create({
       data: {
         ficha_id: BigInt(id),
         exercicio_id: BigInt(exercicio_id),
@@ -258,11 +253,14 @@ router.post('/:id/exercicios', auth, async (req, res) => {
 
     res.status(201).json({
       mensagem: 'Exercício adicionado com sucesso',
-      item: formatBigInt(item),
+      item: formatBigInt(exercicio),
     });
   } catch (error) {
-    console.error('Erro ao adicionar o exercício na ficha:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao adicionar exercício na ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -273,30 +271,29 @@ router.patch('/exercicios/:id', auth, async (req, res) => {
     const { series, repeticoes, descanso_segundos, carga_sugerida } = req.body;
 
     //1. Criar um objeto dinâmico com os campos que serão atualizados na tabela FichaExercício
-    const dadosParaAtualizar = {};
+    const dadosFichaExercicio = {};
 
-    if (series !== undefined) dadosParaAtualizar.series = series;
-    if (repeticoes !== undefined) dadosParaAtualizar.repeticoes = repeticoes;
-    if (descanso_segundos !== undefined) dadosParaAtualizar.descanso_segundos = descanso_segundos;
-    if (carga_sugerida !== undefined) dadosParaAtualizar.carga_sugerida = carga_sugerida;
-
-    if (Object.keys(dadosParaAtualizar).length === 0) {
-      return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
-    }
+    if (series !== undefined) dadosFichaExercicio.series = series;
+    if (repeticoes !== undefined) dadosFichaExercicio.repeticoes = repeticoes;
+    if (descanso_segundos !== undefined) dadosFichaExercicio.descanso_segundos = descanso_segundos;
+    if (carga_sugerida !== undefined) dadosFichaExercicio.carga_sugerida = carga_sugerida;
 
     //2. Executar a atualização no banco de dados
-    const exercicioAtualizado = await prisma.fichaExercicio.update({
+    const FichaExercicioAtualizada = await prisma.fichaExercicio.update({
       where: { id: BigInt(id) },
-      data: dadosParaAtualizar,
+      data: dadosFichaExercicio,
     });
 
     return res.status(200).json({
       message: 'Exercício atualizados com sucesso.',
-      exercicio: formatBigInt(exercicioAtualizado),
+      exercicio: formatBigInt(fichaExercicioAtualizada),
     });
   } catch (error) {
-    console.error('Erro ao atualizar o exercício na ficha:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao atualizar exercício da ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -308,7 +305,11 @@ router.delete('/exercicios/:id', auth, async (req, res) => {
     });
     res.json({ mensagem: 'Exercício removido com sucesso' });
   } catch (error) {
-    res.status(500).json({ erro: error.message });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao remover exercício da ficha de treino.',
+      message: error.message,
+    });
   }
 });
 
@@ -326,7 +327,8 @@ router.put('/:id/vincular-aluno', auth, async (req, res) => {
 
     if (!aluno) {
       return res.status(404).json({
-        erro: 'Aluno não encontrado',
+        error: 'Falha na busca.',
+        message: 'Aluno não encontrado',
       });
     }
 
@@ -343,8 +345,11 @@ router.put('/:id/vincular-aluno', auth, async (req, res) => {
     //3. Retornar a ficha atualizada
     res.json(formatBigInt(ficha));
   } catch (error) {
-    console.error('Erro ao vincular a ficha:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao vincular ficha de treino ao aluno.',
+      message: error.message,
+    });
   }
 });
 
@@ -354,27 +359,29 @@ router.put('/:id/desvincular-aluno', auth, async (req, res) => {
     const { id } = req.params;
 
     //1. Verificar se a ficha realmente existe antes de tentar atualizar
-    const fichaExistente = await prisma.fichaTreino.findUnique({
+    const fichaTreinoExiste = await prisma.fichaTreino.findUnique({
       where: {
         id: BigInt(id),
       },
     });
 
-    if (!fichaExistente) {
+    if (!fichaTreinoExiste) {
       return res.status(404).json({
-        erro: 'Ficha de treino não encontrada.',
+        error: 'Falha na busca.',
+        message: 'Ficha de treino não encontrada.',
       });
     }
 
     //2. Verificar se a ficha já está desvinculada (opcional, mas boa prática)
-    if (fichaExistente.aluno_id === null) {
+    if (fichaTreinoExiste.aluno_id === null) {
       return res.status(400).json({
-        erro: 'Esta ficha já não está vinculada a nenhum aluno.',
+        error: 'Erro no sistema.',
+        message: 'Esta ficha de treino já não está vinculada a nenhum aluno.',
       });
     }
 
     //3. Atualizar a ficha definindo o aluno_id como null
-    const fichaAtualizada = await prisma.fichaTreino.update({
+    const fichaTreinoAtualizada = await prisma.fichaTreino.update({
       where: {
         id: BigInt(id),
       },
@@ -384,12 +391,15 @@ router.put('/:id/desvincular-aluno', auth, async (req, res) => {
     });
 
     res.json({
-      mensagem: 'Ficha desvinculada com sucesso.',
-      ficha: formatBigInt(fichaAtualizada),
+      mensagem: 'Ficha de treino desvinculada com sucesso.',
+      ficha: formatBigInt(fichaTreinoAtualizada),
     });
   } catch (error) {
-    console.error('Erro ao desvincular a ficha:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao desvincular ficha de treino ao aluno.',
+      message: error.message,
+    });
   }
 });
 
@@ -399,10 +409,13 @@ router.delete('/:id', auth, async (req, res) => {
     await prisma.fichaTreino.delete({
       where: { id: BigInt(req.params.id) },
     });
-    res.json({ mensagem: 'Ficha excluída com sucesso' });
+    res.json({ mensagem: 'Ficha de treino excluída com sucesso' });
   } catch (error) {
-    console.error('Erro ao excluir a ficha:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao excluir ficha de treino.',
+      message: error.message,
+    });
   }
 });
 

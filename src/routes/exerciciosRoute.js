@@ -17,12 +17,24 @@ router.post('/', auth, async (req, res) => {
     const { nome, descricao, grupo_muscular } = req.body;
 
     // 1. Fazer a validação básica
-    if (!nome?.trim() || !grupo_muscular?.trim()) {
-      return res.status(400).json({ error: 'Nome e grupo muscular são obrigatórios.' });
+    const camposValidacao = [
+      { valor: nome, campoNome: 'Nome' },
+      { valor: grupo_muscular, campoNome: 'Grupo Muscular' },
+    ];
+
+    const campoVazio = camposValidacao.find((campo) => {
+      if (typeof campo.valor === 'string') return !campo.valor.trim();
+    });
+
+    if (campoVazio) {
+      return res.status(400).json({
+        error: 'Falha no cadastro.',
+        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
     }
 
     //2. Verificar se o exercício já existe
-    const exercicioExistente = await prisma.exercicio.findFirst({
+    const exercicioExiste = await prisma.exercicio.findFirst({
       where: {
         nome: {
           equals: nome.trim(),
@@ -30,8 +42,11 @@ router.post('/', auth, async (req, res) => {
       },
     });
 
-    if (exercicioExistente) {
-      return res.status(409).json({ error: 'Já existe um exercício cadastrado com esse nome.' });
+    if (exercicioExiste) {
+      return res.status(400).json({
+        error: 'Falha no cadastro.',
+        message: 'Esse exercício já foi cadastrado.',
+      });
     }
 
     //3. Criar o exercício
@@ -48,8 +63,11 @@ router.post('/', auth, async (req, res) => {
 
     return res.status(201).json(exercicio);
   } catch (error) {
-    console.error('Erro ao criar exercício:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao cadastrar exercício.',
+      message: error.message,
+    });
   }
 });
 
@@ -79,36 +97,20 @@ router.get('/grupo-muscular/', auth, async (req, res) => {
 
     return res.json(exercicios);
   } catch (error) {
-    console.error('Erro ao listar exercícios:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro no sistema.',
+      message: error.message,
+    });
   }
 });
 
 // Buscar exercício por id ou por nome
 router.get('/', auth, async (req, res) => {
   try {
-    const { id, nome } = req.query;
+    const { nome } = req.query;
 
-    //1. Buscar por ID (se o ID for fornecido via Query Params)
-    if (id) {
-      if (isNaN(Number(id))) {
-        return res.status(400).json({ error: 'O ID fornecido é inválido.' });
-      }
-
-      const exercicioPorId = await prisma.exercicio.findUnique({
-        where: {
-          id: BigInt(id),
-        },
-      });
-
-      if (!exercicioPorId) {
-        return res.status(404).json({ error: 'Exercício não encontrado.' });
-      }
-
-      return res.status(200).json(exercicioPorId);
-    }
-
-    //2. Buscar por nome
+    //1. Buscar por nome
     if (nome && String(nome).trim() !== '') {
       const exerciciosPorNome = await prisma.exercicio.findMany({
         where: {
@@ -118,15 +120,18 @@ router.get('/', auth, async (req, res) => {
         },
       });
 
+      if (!exerciciosPorNome) {
+        return res.status(404).json({ error: 'Exercício não encontrado.' });
+      }
+
       return res.status(200).json(exerciciosPorNome);
     }
-
-    return res
-      .status(400)
-      .json({ error: 'Informe um ID ou um Nome válido para realizar a busca.' });
   } catch (error) {
-    console.error('Erro ao buscar exercício:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar exercício.',
+      message: error.message,
+    });
   }
 });
 
@@ -137,41 +142,42 @@ router.patch('/:id', auth, async (req, res) => {
     const { nome, descricao, grupo_muscular } = req.body;
 
     //1. Verificar se o exercício existe
-    const exercicioExistente = await prisma.exercicio.findFirst({
+    const exercicioExiste = await prisma.exercicio.findFirst({
       where: {
         id: BigInt(id),
       },
     });
 
-    if (!exercicioExistente) {
-      return res.status(404).json({ error: 'Exercício não encontrado.' });
+    if (!exercicioExiste) {
+      return res.status(400).json({
+        error: 'Alteração negada.',
+        message: 'O exercício não existe.',
+      });
     }
 
     //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
-    const dadosParaAtualizar = {};
+    const dadosExercicio = {};
 
-    if (nome !== undefined) dadosParaAtualizar.nome = nome;
-    if (descricao !== undefined) dadosParaAtualizar.descricao = descricao;
-    if (grupo_muscular !== undefined) dadosParaAtualizar.grupo_muscular = grupo_muscular;
-
-    //2.1 Se o corpo veio vazio e nenhum campo válido foi mapeado
-    if (Object.keys(dadosParaAtualizar).length === 0) {
-      return res.status(400).json({ error: 'Nenhum campo válido enviado para atualização.' });
-    }
+    if (nome !== undefined) dadosExercicio.nome = nome;
+    if (descricao !== undefined) dadosExercicio.descricao = descricao;
+    if (grupo_muscular !== undefined) dadosExercicio.grupo_muscular = grupo_muscular;
 
     //3. Executar a atualização no banco de dados
     const exercicioAtualizado = await prisma.exercicio.update({
       where: { id: BigInt(id) },
-      data: dadosParaAtualizar,
+      data: dadosExercicio,
     });
 
     return res.status(200).json({
-      message: 'Exercício atualizados com sucesso.',
+      message: 'Exercício atualizado com sucesso.',
       exercicio: formatBigInt(exercicioAtualizado),
     });
   } catch (error) {
-    console.error('Erro ao atualizar o exercício:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao atualizar exercício.',
+      message: error.message,
+    });
   }
 });
 
@@ -187,8 +193,9 @@ router.delete('/:id', auth, async (req, res) => {
 
     //1.1. Se o exercício não existir
     if (!exercicioExiste) {
-      return res.status(404).json({
-        error: 'Exercício não encontrado.',
+      return res.status(400).json({
+        error: 'Falha na exclusão.',
+        message: 'Exercício não encontrado.',
       });
     }
 
@@ -201,15 +208,16 @@ router.delete('/:id', auth, async (req, res) => {
       message: 'Exercício excluído com sucesso',
     });
   } catch (error) {
-    console.error('Erro ao excluir o exercício:', error);
+    console.error('Erro:', error);
 
     if (error.code === 'P2003') {
       return res.status(400).json({
-        error: 'Não é possível deletar: exercício já está em uso em fichas.',
+        error: 'Não é possível excluir exercício:',
+        message: 'O exercício está em uso na ficha.',
       });
     }
 
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
+    return res.status(500).json({ error: error.message });
   }
 });
 

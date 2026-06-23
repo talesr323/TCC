@@ -23,35 +23,52 @@ router.post('/', auth, admin, async (req, res) => {
   try {
     const { nome, email, cpf, tipo, cref, telefone, foto_perfil } = req.body;
 
-    //1. Fazer a validação básica
-    if (!nome?.trim()) {
-      return res.status(400).json({ error: "O campo 'Nome' é obrigatório." });
+    //1. Fazer a validação básica (verificar se o campo obrigatório foi preenchido)
+    const validacaoBasica = [
+      { valor: nome, campoNome: 'Nome' },
+      { valor: email, campoNome: 'E-mail' },
+      { valor: cpf, campoNome: 'CPF' },
+      { valor: tipo, campoNome: 'Tipo' },
+    ];
+
+    const campoVazio = validacaoBasica.find((campo) => {
+      if (typeof campo.valor === 'string') return !campo.valor.trim();
+    });
+
+    if (campoVazio) {
+      return res.status(400).json({
+        error: 'Cadastro negado.',
+        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
     }
 
-    if (!email?.trim()) {
-      return res.status(400).json({ error: "O campo 'E-mail' é obrigatório." });
-    } else if (!regexEmail.test(email)) {
-      return res.status(400).json({ error: 'E-mail inválido.' });
-    }
-
+    //1.1. Fazer a validação do CPF
     if (!cpfValidator.isValid(cpf)) {
-      return res.status(400).json({ error: 'CPF inválido.' });
-    }
-
-    if (!tipo?.trim()) {
-      return res.status(400).json({ error: "O campo 'Tipo' é obrigatório." });
+      return res.status(400).json({
+        error: 'Cadastro negado.',
+        message: 'CPF inválido.',
+      });
     }
 
     //2. Fazer a validação do tipo de usuário
     if (!['ALUNO', 'PROFESSOR'].includes(tipo)) {
-      return res.status(400).json({ error: "O campo 'Tipo' deve ser ALUNO ou PROFESSOR." });
+      return res.status(400).json({
+        error: 'Cadastro negado.',
+        message: 'O tipo tem que ser "ALUNO" ou "PROFESSOR".',
+      });
     }
 
     //2.1. Caso o tipo seja "PROFESSOR", fazer a validação do CREF
     if (tipo === 'PROFESSOR' && !cref?.trim()) {
-      return res.status(400).json({ error: "O campo 'CREF' deve ser obrigatório." });
+      return res.status(400).json({
+        error: 'Cadastro negado.',
+        message: 'O campo "CREF" é obrigatório.',
+      });
     } else if (tipo === 'PROFESSOR' && !regexCref.test(cref)) {
-      return res.status(400).json({ error: 'CREF inválido.' });
+      return res.status(400).json({
+        error: 'Cadastro negado.',
+        message: 'CREF inválido.',
+      });
     }
 
     //3. Criar o perfil do usuário
@@ -99,7 +116,7 @@ router.post('/', auth, admin, async (req, res) => {
       perfil: formatBigInt(perfil),
     });
   } catch (error) {
-    console.error('Erro no cadastro do usuário:', error);
+    console.error('Erro:', error);
 
     if (error.code === 'P2002') {
       let campo = error.meta?.target;
@@ -112,11 +129,15 @@ router.post('/', auth, admin, async (req, res) => {
       }
 
       return res.status(400).json({
-        error: `${campo} já cadastrado.`,
+        error: 'Não é possível cadastrar usuário:',
+        message: `${campo} já cadastrado.`,
       });
     }
 
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: 'Erro no cadastro do usuário.',
+      message: error.message,
+    });
   }
 });
 
@@ -163,14 +184,17 @@ router.get('/tipo/', auth, async (req, res) => {
     return res.status(200).json(formatBigInt(usuarios));
   } catch (error) {
     console.error('Erro:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: 'Erro no sistema.',
+      message: error.message,
+    });
   }
 });
 
-//Buscar usuário por id ou por nome
+//Buscar usuário por nome
 router.get('/', auth, async (req, res) => {
   try {
-    const { id, nome } = req.query;
+    const { nome } = req.query;
     const academiaId = req.usuario.academia_id;
 
     //1. Definir o include para trazer os relacionamentos e identificar o tipo
@@ -179,33 +203,7 @@ router.get('/', auth, async (req, res) => {
       professor: true,
     };
 
-    //2. Buscar por ID
-    if (id) {
-      if (isNaN(Number(id))) {
-        return res.status(400).json({ error: 'ID inválido. Tente novamente' });
-      }
-
-      const usuario = await prisma.usuario.findFirst({
-        where: {
-          id: BigInt(id),
-          academia_id: academiaId,
-        },
-        include: incluirRelacionamentos,
-      });
-
-      if (!usuario) {
-        return res.status(404).json({ error: 'Usuário não encontrado. Tente novamente' });
-      }
-
-      const usuarioFormatado = {
-        ...usuario,
-        tipo: usuario.professor ? 'professor' : usuario.aluno ? 'aluno' : 'usuario_comum',
-      };
-
-      return res.json(formatBigInt(usuarioFormatado));
-    }
-
-    //3. Buscar por Nome
+    //2. Buscar por Nome
     if (nome && String(nome).trim() !== '') {
       const usuarios = await prisma.usuario.findMany({
         where: {
@@ -229,16 +227,20 @@ router.get('/', auth, async (req, res) => {
       return res.json(formatBigInt(usuariosFormatados));
     }
 
-    return res
-      .status(400)
-      .json({ error: 'Informe um ID ou um nome válido para realizar a busca.' });
+    return res.status(400).json({
+      error: 'Falha na busca.',
+      message: 'Usuario não encontrado.',
+    });
   } catch (error) {
-    console.error('Erro na busca do usuário:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Erro:', error);
+    res.status(500).json({
+      error: 'Erro na busca do usuário.',
+      message: error.message,
+    });
   }
 });
 
-//Atualizar dados cadastrais do usuário
+//Atualizar os dados cadastrais do usuário
 router.patch('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -248,13 +250,16 @@ router.patch('/:id', auth, async (req, res) => {
 
     //Bloqueio na alteração do CPF ou CREF
     if (cpf !== undefined || cref !== undefined) {
+      const campoInvalido = cpf !== undefined ? 'CPF' : 'CREF';
+
       return res.status(400).json({
-        error: 'Não é permitido alterar o CPF ou o CREF após o cadastro.',
+        error: 'Alteração negada.',
+        message: `O campo ${campoInvalido} não pode ser alterado.`,
       });
     }
 
     //1. Verificar se o usuário existe e pertence à mesma academia
-    const usuarioExistente = await prisma.usuario.findFirst({
+    const usuarioExiste = await prisma.usuario.findFirst({
       where: {
         id: BigInt(id),
         academia_id: academiaId,
@@ -265,50 +270,52 @@ router.patch('/:id', auth, async (req, res) => {
       },
     });
 
-    if (!usuarioExistente) {
-      return res.status(404).json({ error: 'Usuário não encontrado nesta academia.' });
+    if (!usuarioExiste) {
+      return res.status(404).json({
+        error: 'Alteração negada.',
+        message: 'Usuário não encontrado nesta academia.',
+      });
     }
 
     //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Usuario
-    const dadosParaAtualizar = {};
+    const dadosUsuario = {};
 
-    if (nome !== undefined) dadosParaAtualizar.nome = nome;
+    if (nome !== undefined) dadosUsuario.nome = nome;
 
     if (email !== undefined) {
       if (!regexEmail.test(email)) {
-        return res.status(400).json({ error: 'E-mail inválido.' });
+        return res.status(400).json({ error: 'E-mail inválido. Tente novamente.' });
       }
-      dadosParaAtualizar.email = email;
+      dadosUsuario.email = email;
     }
 
-    if (telefone !== undefined) dadosParaAtualizar.telefone = telefone;
-    if (foto_perfil !== undefined) dadosParaAtualizar.foto_perfil = foto_perfil;
+    if (telefone !== undefined) dadosUsuario.telefone = telefone;
+    if (foto_perfil !== undefined) dadosUsuario.foto_perfil = foto_perfil;
 
     if (senha !== undefined) {
       if (!regexSenha.test(senha)) {
         return res.status(400).json({
-          error: 'A senha deve conter pelo menos 8 caracteres e possuir uma letra ou um número.',
+          error: 'Alteração negada.',
+          message: 'A senha não atende aos requisitos de segurança.',
         });
       }
 
       const senhaIgual = await bycrypt.compare(senha, usuarioExistente.senha_hash);
       if (senhaIgual) {
-        return res.status(400).json({ error: 'A nova senha não pode ser igual à senha anterior.' });
+        return res.status(400).json({
+          error: 'Alteração negada.',
+          message: 'A nova senha não pode ser igual à senha anterior.',
+        });
       }
 
       const salt = await bycrypt.genSalt(10);
-      dadosParaAtualizar.senha_hash = await bycrypt.hash(senha, salt);
-    }
-
-    //2.1. Se o corpo veio vazio e nenhum campo válido foi mapeado
-    if (Object.keys(dadosParaAtualizar).length === 0) {
-      return res.status(400).json({ error: 'Nenhum campo válido foi enviado para atualização.' });
+      dadosUsuario.senha_hash = await bycrypt.hash(senha, salt);
     }
 
     //3. Executar a atualização no banco de dados (Serve tanto para Aluno quanto Professor)
     const usuarioAtualizado = await prisma.usuario.update({
       where: { id: BigInt(id) },
-      data: dadosParaAtualizar,
+      data: dadosUsuario,
       include: {
         aluno: true,
         professor: true,
@@ -316,11 +323,11 @@ router.patch('/:id', auth, async (req, res) => {
     });
 
     return res.status(200).json({
-      message: 'Dados cadastrais atualizados com sucesso.',
+      message: 'Dados do usuário atualizados com sucesso.',
       usuario: formatBigInt(usuarioAtualizado),
     });
   } catch (error) {
-    console.error('Erro na alteração cadastral do usuário:', error);
+    console.error('Erro:', error);
 
     if (error.code === 'P2002') {
       let campo = error.meta?.target;
@@ -330,10 +337,16 @@ router.patch('/:id', auth, async (req, res) => {
         campo = 'Email';
       }
 
-      return res.status(400).json({ error: `${campo} já está em uso por outro usuário.` });
+      return res.status(400).json({
+        error: 'Não é possível atualizar os dados cadastrais do usuário:.',
+        message: `${campo} já está em uso por outro usuário.`,
+      });
     }
 
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: 'Erro na alteração cadastral do usuário.',
+      message: error.message,
+    });
   }
 });
 
@@ -357,13 +370,17 @@ router.delete('/:id', auth, async (req, res) => {
 
     //1.1. Se o usuário não existir nesta academia, retorna 404
     if (!usuario) {
-      return res.status(404).json({ error: 'Usuário não encontrado nesta academia.' });
+      return res.status(404).json({
+        error: 'Falha na exclusão.',
+        message: 'Usuário não encontrado nesta academia.',
+      });
     }
 
     if (!usuario.aluno && !usuario.professor) {
-      return res
-        .status(403)
-        .json({ error: 'Não é permitido excluir administradores por esta rota.' });
+      return res.status(403).json({
+        error: 'Falha na exclusão.',
+        message: 'Não é permitido excluir administradores.',
+      });
     }
 
     //2. Deletar manualmente os vínculos antes de apagar o usuário
@@ -395,8 +412,11 @@ router.delete('/:id', auth, async (req, res) => {
       message: 'Usuário excluído com sucesso.',
     });
   } catch (error) {
-    console.error('Erro na exclusão do usuário:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao excluir usuário.',
+      message: error.message,
+    });
   }
 });
 
