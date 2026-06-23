@@ -142,6 +142,7 @@ router.post('/login', async (req, res) => {
     const tokenPayload = {
       usuario_id: usuario.id.toString(),
       email: usuario.email,
+      tipo,
       academia_id: usuario.academia_id.toString(),
       [`${tipo.toLowerCase()}_id`]: papelId?.toString() || null, //Cria dinamicamente a propriedade
     };

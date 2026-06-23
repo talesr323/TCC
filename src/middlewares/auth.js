@@ -13,15 +13,17 @@ function auth(req, res, next) {
     });
   }
 
-  const token = authHeader.split(' ')[1]; //O cabeçalho costuma vir no formato "Bearer Token"
+  const partesToken = authHeader.split(' '); //O cabeçalho costuma vir no formato "Bearer Token"
 
-  if (parts.length !== 2 || parts[0] !== 'Bearer') {
+  if (partesToken.length !== 2 || partesToken[0] !== 'Bearer') {
     return res.status(401).json({
       error: 'Acesso negado',
-      message: 'Formato do token inválido. O padrão esperado é: "Bearer {{TOKEN}}".',
+      message: 'Formato do token inválido. O padrão esperado é: "Bearer {{token}}".',
       code: 'AUTH_HEADER_MALFORMED',
     });
   }
+
+  const token = partesToken[1];
 
   try {
     //2. Verificar o token usando a chave secreta guardada nas variáveis de ambiente (.env)

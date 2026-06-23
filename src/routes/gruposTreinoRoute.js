@@ -171,13 +171,14 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const grupoExistente = await prisma.grupoTreino.findUnique({
+    const grupoTreinoExiste = await prisma.grupoTreino.findUnique({
       where: { id: BigInt(id) },
     });
 
-    if (!grupoExistente) {
+    if (!grupoExiste) {
       return res.status(404).json({
-        error: 'Grupo de treino não encontrado.',
+        error: 'Falha na exclusão',
+        message: 'Grupo de treino não encontrado.',
       });
     }
 
@@ -189,8 +190,11 @@ router.delete('/:id', async (req, res) => {
       message: 'Grupo de treino excluído com sucesso',
     });
   } catch (error) {
-    console.error('Erro ao excluir grupo de treino:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao excluir grupo de treino.',
+      message: error.message,
+    });
   }
 });
 

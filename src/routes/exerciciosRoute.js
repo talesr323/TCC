@@ -121,7 +121,10 @@ router.get('/', auth, async (req, res) => {
       });
 
       if (!exerciciosPorNome) {
-        return res.status(404).json({ error: 'Exercício não encontrado.' });
+        return res.status(404).json({
+          error: 'Erro no sistema.',
+          message: 'O exercício não existe.',
+        });
       }
 
       return res.status(200).json(exerciciosPorNome);
@@ -217,7 +220,10 @@ router.delete('/:id', auth, async (req, res) => {
       });
     }
 
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: 'Erro ao excluir exercício.',
+      message: error.message,
+    });
   }
 });
 

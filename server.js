@@ -34,7 +34,7 @@ app.use('/conquistas', conquistasRoute);
 app.use('/exercicios', exerciciosRoute);
 app.use('/ficha-execucao', fichaExecucaoRoute);
 app.use('/fichas', fichasRoute);
-app.use('/grupos-treino', gruposTeinoRoute);
+app.use('/grupos-treino', gruposTreinoRoute);
 app.use('/ranking', rankingRoute);
 app.use('/usuarios', usuariosRoute);
 
