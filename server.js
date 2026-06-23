@@ -10,7 +10,6 @@ import exerciciosRoute from './src/routes/exerciciosRoute.js';
 import fichaExecucaoRoute from './src/routes/fichaExecucaoRoute.js';
 import fichasRoute from './src/routes/fichasRoute.js';
 import gruposTreinoRoute from './src/routes/gruposTreinoRoute.js';
-import rankingRoute from './src/routes/rankingRoute.js';
 import usuariosRoute from './src/routes/usuariosRoute.js';
 
 import auth from './src/middlewares/auth.js'; //Importante
@@ -35,7 +34,6 @@ app.use('/exercicios', exerciciosRoute);
 app.use('/ficha-execucao', fichaExecucaoRoute);
 app.use('/fichas', fichasRoute);
 app.use('/grupos-treino', gruposTreinoRoute);
-app.use('/ranking', rankingRoute);
 app.use('/usuarios', usuariosRoute);
 
 app.listen(3001, '0.0.0.0', () => {
