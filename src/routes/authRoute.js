@@ -1,7 +1,9 @@
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { solicitarCodigoVerificacao } from '../services/codigoVerificacao.js';
+import { redefinirSenha } from '../services/senhaRecuperada.js';
 
 const prisma = new PrismaClient();
 const regexSenha = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/; //min de 8 caracteres, com 1 letra e 1 número
@@ -29,34 +31,27 @@ router.post('/ativacao-conta', async (req, res) => {
     });
 
     if (campoVazio) {
-      return res.status(400).json({
-        error: 'Falha na ativação.',
-        message: `O campo "${campoVazio.nome}" é obrigatório.`,
-      });
+      return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
     }
 
     //2. Fazer a validação do token de ativação
     const registroToken = await prisma.tokenAtivacao.findUnique({
-      where: { token },
+      where: { token: tokenAtivacao },
     });
 
     if (!registroToken || registroToken.usado) {
-      return res.status(400).json({
-        error: 'Falha na validação do token.',
-        message: 'Token de autenticação inválido ou corrompido.',
-      });
+      return res.status(400).json({ error: 'Token inválido.' });
     } else if (registroToken.expira_em < new Date()) {
       return res.status(400).json({
-        error: 'Falha na validação do token.',
-        message: 'O token fornecido expirou. Por favor, tente novamente',
-        expiredAt: error.expiredAt,
+        error: 'O token fornecido expirou. Por favor, tente novamente',
+        expiredAt: registroToken.expiredAt,
       });
     }
 
     //3. Fazer a validação da senha cadastrada
     if (!regexSenha.test(senha)) {
       return res.status(400).json({
-        error: 'Falha na validação da senha cadastrada.',
+        error: 'Senha inválida.',
         message: 'Senha não atende aos requisitos de segurança.',
       });
     }
@@ -95,10 +90,7 @@ router.post('/login', async (req, res) => {
     const campoVazio = camposValidacao.find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
-      return res.status(400).json({
-        error: 'Falha no login.',
-        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
-      });
+      return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
     }
 
     //2. Fazer a busca do usuário
@@ -110,10 +102,7 @@ router.post('/login', async (req, res) => {
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
 
     if (!usuario || !senhaValida) {
-      return res.status(400).json({
-        error: 'Login negado.',
-        message: 'Credenciais inválidas. Tente novamente.',
-      });
+      return res.status(400).json({ error: 'Credenciais inválidas. Tente novamente.' });
     }
 
     //4. Fazer a descoberta dinâmica do tipo de usuário (admin, aluno ou professor)
@@ -162,7 +151,62 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
-      error: 'Erro no login.',
+      error: 'Não é possível fazer o login.',
+      message: error.message,
+    });
+  }
+});
+
+//Solicitar o código de verificação para recuperar a senha
+router.post('/solicitacao-codigo', async (req, res) => {
+  const { telefone } = req.body;
+
+  //1. Fazer a validação básica
+  if (!telefone?.trim()) {
+    return res.status(400).json({ error: 'O campo "Telefone" é obrigatório.' });
+  }
+
+  const codigoVerificacao = await solicitarCodigoVerificacao(telefone);
+
+  if (!codigoVerificacao.success) {
+    return res.status(400).json({
+      error: 'Não foi possível receber o código de verificação.',
+      message: codigoVerificacao.error,
+    });
+  }
+
+  return res.status(200).json({ message: codigoVerificacao.message });
+});
+
+//Redefinir a senha
+router.post('/redefinicao-senha', async (req, res) => {
+  const { codigoVerificacao, novaSenha } = req.body;
+
+  //1. Fazer a validação básica
+  const validacaoBasica = [
+    { valor: codigoVerificacao, campoNome: 'Código de Verificação' },
+    { valor: novaSenha, campoNome: 'Senha' },
+  ];
+
+  const campoVazio = validacaoBasica.find((campo) => {
+    if (typeof campo.valor === 'string') return !campo.valor.trim();
+  });
+
+  if (campoVazio) {
+    return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
+  }
+
+  try {
+    const senhaRedefinida = await redefinirSenha(codigoVerificacao, novaSenha);
+
+    if (!senhaRedefinida.success) {
+      return res.status(400).json({ error: senhaRedefinida.error });
+    }
+
+    return res.status(200).json({ message: senhaRedefinida.message });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Erro ao redefinir a senha.',
       message: error.message,
     });
   }

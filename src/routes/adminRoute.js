@@ -1,7 +1,7 @@
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { cnpj as cnpjValidator, cpf as cpfValidator } from 'cpf-cnpj-validator';
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; //formato "usuario@dominio.com"
@@ -48,8 +48,7 @@ router.post('/', async (req, res) => {
 
     if (campoVazio) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
-        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
       });
     }
 
@@ -64,20 +63,14 @@ router.post('/', async (req, res) => {
     const campoInvalido = validacaoEspecifica.find((campoValor) => !campoValor.isValid);
 
     if (campoInvalido) {
-      return res.status(400).json({
-        error: 'Cadastro negado.',
-        message: `O campo "${campoInvalido.campoNome}" é inválido.`,
-      });
+      return res.status(400).json({ error: `O campo "${campoInvalido.campoNome}" é inválido.` });
     }
 
     //2. Verificar se o sistema já foi inicializado
     const adminExiste = await prisma.admin.findFirst();
 
     if (adminExiste) {
-      return res.status(400).json({
-        error: 'Falha no cadastro.',
-        message: 'O sistema já foi inicializado.',
-      });
+      return res.status(400).json({ error: 'O sistema já foi inicializado.' });
     }
 
     const senha_hash = await bcrypt.hash(senha, 10); //Gerar o hash da senha
@@ -120,7 +113,7 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
-      error: 'Erro ao inicializar sistema.',
+      error: 'Erro ao inicializar o sistema.',
       message: error.message,
     });
   }

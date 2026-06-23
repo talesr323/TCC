@@ -1,6 +1,7 @@
 import prisma from '../../prisma/client.js';
 
-export async function verificarConquistas(alunoId) {
+export async function processarGamificacaoTreino(alunoId) {
+  // 1. Contar o total de treinos finalizados do aluno
   const totalTreinos = await prisma.execucaoFicha.count({
     where: {
       aluno_id: alunoId,
@@ -8,44 +9,35 @@ export async function verificarConquistas(alunoId) {
     },
   });
 
-  const conquistas = [
-    {
-      treinos: 1,
-      nome: 'Primeiro Treino',
-    },
-    {
-      treinos: 10,
-      nome: 'Persistente',
-    },
-    {
-      treinos: 50,
-      nome: 'Guerreiro',
-    },
-    {
-      treinos: 100,
-      nome: 'Lenda da Academia',
-    },
+  // Regras das conquistas por quantidade de treinos
+  const conquistasRegras = [
+    { treinos: 5, nome: 'Primeiro Passo' },
+    { treinos: 25, nome: 'Rítmo Encontrado' },
+    { treinos: 50, nome: 'Hábito Formado' },
+    { treinos: 75, nome: 'Evolução Constante' },
+    { treinos: 100, nome: 'Motivado' },
   ];
 
-  for (const item of conquistas) {
+  // 2. Verificar e entregar as conquistas merecidas
+  for (const item of conquistasRegras) {
     if (totalTreinos >= item.treinos) {
       const conquista = await prisma.conquista.findFirst({
-        where: {
-          nome: item.nome,
-        },
+        where: { nome: item.nome },
       });
 
       if (!conquista) continue;
 
+      // Verifica se o aluno já possui essa conquista
       const jaPossui = await prisma.alunoConquista.findUnique({
         where: {
           aluno_id_conquista_id: {
             aluno_id: alunoId,
-            conquista_id: conquista.id,
+            conquista_id: conquista.id, // Corrigido de conquista.id
           },
         },
       });
 
+      // Se ainda não possui, entrega a conquista e o XP bônus
       if (!jaPossui) {
         await prisma.alunoConquista.create({
           data: {
@@ -53,6 +45,14 @@ export async function verificarConquistas(alunoId) {
             conquista_id: conquista.id,
           },
         });
+
+        // Incrementa o XP bônus da conquista no perfil do Aluno
+        if (conquista.xp_bonus > 0) {
+          await prisma.aluno.update({
+            where: { id: alunoId },
+            data: { experiencia: { increment: conquista.xp_bonus } },
+          });
+        }
       }
     }
   }

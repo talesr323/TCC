@@ -40,6 +40,9 @@ model Usuario {
 
   tokens     TokenAtivacao[]
 
+  senha_atual     UsuarioSenha?
+  recuperacoes    SenhaRecuperada[]
+
   @@map("usuarios")
 }
 
@@ -71,15 +74,10 @@ model Aluno {
   id         BigInt @id @default(autoincrement())
   usuario_id BigInt @unique
 
-  experiencia Int @default(0)
-  nivel       Int @default(1)
-  moedas      Int @default(0)
-
   usuario Usuario @relation(fields: [usuario_id], references: [id])
 
   fichas            FichaTreino[]
   registrosTreino   RegistroTreino[]
-  rankings          Ranking[]
   conquistas        AlunoConquista[]
   execucoes         ExecucaoFicha[]
 }
@@ -162,16 +160,6 @@ model RegistroTreino {
   @@map("registro_treino")
 }
 
-model Ranking {
-  id           BigInt @id @default(autoincrement())
-  aluno_id     BigInt @unique
-  pontos_total Int    @default(0)
-
-  aluno Aluno @relation(fields: [aluno_id], references: [id], onDelete: Cascade)
-
-  @@map("ranking")
-}
-
 model Relatorio {
   id           BigInt   @id @default(autoincrement())
   tipo         String   @db.VarChar(100)
@@ -227,8 +215,6 @@ model ExecucaoFicha {
   iniciado_em    DateTime @default(now())
   finalizado_em  DateTime?
 
-  xp_ganha       Int @default(0)
-
   status         StatusExecucao @default(EM_ANDAMENTO)
 
   ficha          FichaTreino @relation(fields: [ficha_id], references: [id])
@@ -240,7 +226,6 @@ model Conquista {
 
   nome        String @unique
   descricao   String
-  xp_bonus    Int @default(0)
 
   alunos      AlunoConquista[]
 }
@@ -255,4 +240,29 @@ model AlunoConquista {
   conquista     Conquista @relation(fields: [conquista_id], references: [id])
 
   @@id([aluno_id, conquista_id])
+}
+
+model UsuarioSenha{
+  id BigInt @id @default(autoincrement())
+  usuario_id BigInt @unique
+  senha_hash String @db.VarChar(255)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("usuario_senhas")
+}
+
+model SenhaRecuperada {
+  id         BigInt   @id @default(autoincrement())
+  usuario_id BigInt
+  token      String   @unique @db.VarChar(255)
+  expira_em  DateTime
+  usado      Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  usuario    Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("senhas_recuperadas")
 }

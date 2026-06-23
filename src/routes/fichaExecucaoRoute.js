@@ -1,7 +1,7 @@
 import auth from '../middlewares/auth.js';
 import express from 'express';
 import prisma from '../../prisma/client.js';
-import { verificarConquistas } from '../services/gamificacao.js';
+import { processarGamificacaoTreino } from '../services/gamificacao.js';
 
 const router = express.Router();
 
@@ -65,7 +65,7 @@ router.post('/finalizar/:fichaId', auth, async (req, res) => {
     });
 
     //2. Processar os ganhos de XP, moedas e conquistas
-    await verificarConquistas(aluno_id, XP_PADRAO_TREINO, 15);
+    await processarGamificacaoTreino(aluno_id, XP_PADRAO_TREINO, 15);
 
     res.status(200).json({
       mensagem: 'Treino finalizado com sucesso! Recompensas computadas.',
