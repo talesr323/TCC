@@ -68,7 +68,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 //Listar todas as fichas de treino (com opção de filtrar por nível)
-router.get('/nivel/', auth, async (req, res) => {
+router.get('/nivel/:nivel', auth, async (req, res) => {
   try {
     const professor_id = req.usuario.professor_id;
     const { nivel } = req.query;
@@ -104,7 +104,7 @@ router.get('/nivel/', auth, async (req, res) => {
   }
 });
 
-//Buscar a ficha de treino por id ou por nome
+//Buscar a ficha de treino por nome
 router.get('/', auth, async (req, res) => {
   try {
     const { nome } = req.query;

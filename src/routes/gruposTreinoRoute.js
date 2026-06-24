@@ -55,7 +55,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 //Listar todos os grupos de treino (com opção de filtrar por nível)
-router.get('/nivel/', auth, async (req, res) => {
+router.get('/nivel/:nivel', auth, async (req, res) => {
   try {
     //1. Capturar o nível dos parâmetros da URL
     const { nivel } = req.query;
@@ -87,7 +87,7 @@ router.get('/nivel/', auth, async (req, res) => {
 });
 
 // Buscar exercício por nome
-router.get('/', auth, async (req, res) => {
+router.get('/:nome', auth, async (req, res) => {
   try {
     const { nome } = req.query;
 

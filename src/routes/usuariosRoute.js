@@ -142,7 +142,7 @@ router.post('/', auth, admin, async (req, res) => {
 });
 
 //Listar todos os usuários (com opção de filtrar por tipo)
-router.get('/tipo/', auth, async (req, res) => {
+router.get('/tipo/:tipo', auth, async (req, res) => {
   try {
     const { tipo } = req.query;
     const { academia_id } = req.usuario; //Garante que só busca usuários da mesma academia do adm logado
@@ -192,7 +192,7 @@ router.get('/tipo/', auth, async (req, res) => {
 });
 
 //Buscar usuário por nome
-router.get('/', auth, async (req, res) => {
+router.get('/:nome', auth, async (req, res) => {
   try {
     const { nome } = req.query;
     const academiaId = req.usuario.academia_id;
