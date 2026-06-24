@@ -37,7 +37,7 @@ router.post('/', auth, admin, async (req, res) => {
 
     if (campoVazio) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
+        error: 'Cadastro negado. Campo obrigatório',
         message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
       });
     }
@@ -45,7 +45,7 @@ router.post('/', auth, admin, async (req, res) => {
     //1.1. Fazer a validação do CPF
     if (!cpfValidator.isValid(cpf)) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
+        error: 'Cadastro negado. CPF invalido',
         message: 'CPF inválido.',
       });
     }
@@ -61,12 +61,12 @@ router.post('/', auth, admin, async (req, res) => {
     //2.1. Caso o tipo seja "PROFESSOR", fazer a validação do CREF
     if (tipo === 'PROFESSOR' && !cref?.trim()) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
+        error: 'Cadastro negado. CREF obrigatório',
         message: 'O campo "CREF" é obrigatório.',
       });
     } else if (tipo === 'PROFESSOR' && !regexCref.test(cref)) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
+        error: 'Cadastro negado. CREF inválido',
         message: 'CREF inválido.',
       });
     }

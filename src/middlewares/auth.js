@@ -7,7 +7,7 @@ function auth(req, res, next) {
   //1.1. Se o cabeçalho "Authorization" não existir, o sistema irá barrar a requisição
   if (!authHeader) {
     return res.status(401).json({
-      error: 'Acesso negado.',
+      error: 'Acesso negado. O cabeçalho não foi fornecido',
       message: 'O cabeçalho de autorização (Authorization Header) não foi fornecido.',
       code: 'AUTH_HEADER_MISSING', //Ajuda o front-end a criar telas de erro customizadas
     });
@@ -17,7 +17,7 @@ function auth(req, res, next) {
 
   if (partesToken.length !== 2 || partesToken[0] !== 'Bearer') {
     return res.status(401).json({
-      error: 'Acesso negado',
+      error: 'Acesso negado. Token inválido.',
       message: 'Formato do token inválido. O padrão esperado é: "Bearer {{token}}".',
       code: 'AUTH_HEADER_MALFORMED',
     });

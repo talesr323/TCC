@@ -44,7 +44,7 @@ router.post('/ativacao-conta', async (req, res) => {
     } else if (registroToken.expira_em < new Date()) {
       return res.status(400).json({
         error: 'O token fornecido expirou. Por favor, tente novamente',
-        expiredAt: registroToken.expiredAt,
+        expiredAt: registroToken.expira_em,
       });
     }
 
@@ -98,10 +98,14 @@ router.post('/login', async (req, res) => {
       where: { email: email.trim() },
     });
 
+    if (!usuario) {
+      return res.status(400).json({ error: 'Credenciais inválidas. Tente novamente.' });
+    }
+
     //3. Fazer a validação de segurança básicas
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
 
-    if (!usuario || !senhaValida) {
+    if (!senhaValida) {
       return res.status(400).json({ error: 'Credenciais inválidas. Tente novamente.' });
     }
 
