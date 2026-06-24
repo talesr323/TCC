@@ -37,7 +37,7 @@ router.post('/', auth, admin, async (req, res) => {
 
     if (campoVazio) {
       return res.status(400).json({
-        error: 'Cadastro negado. Campo obrigatório',
+        error: 'Cadastro negado.',
         message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
       });
     }
@@ -45,7 +45,7 @@ router.post('/', auth, admin, async (req, res) => {
     //1.1. Fazer a validação do CPF
     if (!cpfValidator.isValid(cpf)) {
       return res.status(400).json({
-        error: 'Cadastro negado. CPF invalido',
+        error: 'Cadastro negado.',
         message: 'CPF inválido.',
       });
     }
@@ -61,12 +61,12 @@ router.post('/', auth, admin, async (req, res) => {
     //2.1. Caso o tipo seja "PROFESSOR", fazer a validação do CREF
     if (tipo === 'PROFESSOR' && !cref?.trim()) {
       return res.status(400).json({
-        error: 'Cadastro negado. CREF obrigatório',
+        error: 'Cadastro negado.',
         message: 'O campo "CREF" é obrigatório.',
       });
     } else if (tipo === 'PROFESSOR' && !regexCref.test(cref)) {
       return res.status(400).json({
-        error: 'Cadastro negado. CREF inválido',
+        error: 'Cadastro negado.',
         message: 'CREF inválido.',
       });
     }
@@ -228,8 +228,7 @@ router.get('/', auth, async (req, res) => {
     }
 
     return res.status(400).json({
-      error: 'Falha na busca.',
-      message: 'Usuario não encontrado.',
+      error: 'Usuario não encontrado.',
     });
   } catch (error) {
     console.error('Erro:', error);
@@ -253,8 +252,7 @@ router.patch('/:id', auth, async (req, res) => {
       const campoInvalido = cpf !== undefined ? 'CPF' : 'CREF';
 
       return res.status(400).json({
-        error: 'Alteração negada.',
-        message: `O campo ${campoInvalido} não pode ser alterado.`,
+        error: `O campo ${campoInvalido} não pode ser alterado.`,
       });
     }
 
@@ -295,16 +293,14 @@ router.patch('/:id', auth, async (req, res) => {
     if (senha !== undefined) {
       if (!regexSenha.test(senha)) {
         return res.status(400).json({
-          error: 'Alteração negada.',
-          message: 'A senha não atende aos requisitos de segurança.',
+          error: 'A senha não atende aos requisitos de segurança.',
         });
       }
 
       const senhaIgual = await bycrypt.compare(senha, usuarioExistente.senha_hash);
       if (senhaIgual) {
         return res.status(400).json({
-          error: 'Alteração negada.',
-          message: 'A nova senha não pode ser igual à senha anterior.',
+          error: 'A nova senha não pode ser igual à senha anterior.',
         });
       }
 
@@ -338,8 +334,7 @@ router.patch('/:id', auth, async (req, res) => {
       }
 
       return res.status(400).json({
-        error: 'Não é possível atualizar os dados cadastrais do usuário:.',
-        message: `${campo} já está em uso por outro usuário.`,
+        error: `${campo} já está em uso por outro usuário.`,
       });
     }
 
@@ -371,15 +366,13 @@ router.delete('/:id', auth, async (req, res) => {
     //1.1. Se o usuário não existir nesta academia, retorna 404
     if (!usuario) {
       return res.status(404).json({
-        error: 'Falha na exclusão.',
-        message: 'Usuário não encontrado nesta academia.',
+        error: 'Usuário não encontrado nesta academia.',
       });
     }
 
     if (!usuario.aluno && !usuario.professor) {
       return res.status(403).json({
-        error: 'Falha na exclusão.',
-        message: 'Não é permitido excluir administradores.',
+        error: 'Não é permitido excluir administradores.',
       });
     }
 

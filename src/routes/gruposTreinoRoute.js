@@ -28,8 +28,7 @@ router.post('/', auth, async (req, res) => {
 
     if (grupoExiste) {
       return res.status(409).json({
-        error: 'Falha no cadastro.',
-        message: 'Já existe um grupo de treino cadastrado com esse nome.',
+        error: 'Já existe um grupo de treino cadastrado com esse nome.',
       });
     }
 
@@ -104,8 +103,7 @@ router.get('/', auth, async (req, res) => {
 
       if (!grupoTreinoPorNome) {
         return res.status(404).json({
-          error: 'Erro no sistema.',
-          message: 'O grupo de treino não existe.',
+          error: 'O grupo de treino não existe.',
         });
       }
 
@@ -135,8 +133,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     if (!grupoTreinoExiste) {
       return res.status(404).json({
-        error: 'Alteração negada.',
-        message: 'Grupo treino não encontrado.',
+        error: 'Grupo treino não encontrado.',
       });
     }
 
@@ -177,8 +174,7 @@ router.delete('/:id', async (req, res) => {
 
     if (!grupoExiste) {
       return res.status(404).json({
-        error: 'Falha na exclusão',
-        message: 'Grupo de treino não encontrado.',
+        error: 'Grupo de treino não encontrado.',
       });
     }
 

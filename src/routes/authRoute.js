@@ -6,53 +6,52 @@ import { solicitarCodigoVerificacao } from '../services/codigoVerificacao.js';
 import { redefinirSenha } from '../services/senhaRecuperada.js';
 
 const prisma = new PrismaClient();
-const regexSenha = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/; //min de 8 caracteres, com 1 letra e 1 número
+const regexSenha = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
 const router = express.Router();
 
-//Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
-//Ativar conta
+// Ativar conta
 router.post('/ativacao-conta', async (req, res) => {
+  console.log('CHEGOU NA ROTA DE ATIVAÇÃO');
+  console.log('BODY:', req.body);
   try {
     const { tokenAtivacao, senha } = req.body;
 
-    //1. Fazer a validação básica (verificar se o campo obrigatório foi preenchido)
     const validacaoBasica = [
       { valor: tokenAtivacao, campoNome: 'Token de Ativação' },
       { valor: senha, campoNome: 'Senha' },
     ];
 
-    const campoVazio = validacaoBasica.find((campo) => {
-      if (typeof campo.valor === 'string') return !campo.valor.trim();
-    });
+    const campoVazio = validacaoBasica.find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
-      return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
+      return res.status(400).json({
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
     }
 
-    //2. Fazer a validação do token de ativação
     const registroToken = await prisma.tokenAtivacao.findUnique({
-      where: { token: tokenAtivacao },
+      where: { token: tokenAtivacao.trim() },
     });
 
     if (!registroToken || registroToken.usado) {
       return res.status(400).json({ error: 'Token inválido.' });
-    } else if (registroToken.expira_em < new Date()) {
+    }
+
+    if (registroToken.expira_em < new Date()) {
       return res.status(400).json({
-        error: 'O token fornecido expirou. Por favor, tente novamente',
+        error: 'O token fornecido expirou. Por favor, tente novamente.',
         expiredAt: registroToken.expira_em,
       });
     }
 
-    //3. Fazer a validação da senha cadastrada
     if (!regexSenha.test(senha)) {
       return res.status(400).json({
-        error: 'Senha inválida.',
-        message: 'Senha não atende aos requisitos de segurança.',
+        error: 'A senha deve ter no mínimo 8 caracteres, com pelo menos 1 letra e 1 número.',
       });
     }
 
@@ -66,22 +65,33 @@ router.post('/ativacao-conta', async (req, res) => {
       },
     });
 
-    return res.status(200).json({ message: 'Conta ativada com sucesso!' });
+    await prisma.tokenAtivacao.updateMany({
+      where: { token: tokenAtivacao.trim() },
+      data: {
+        usado: true,
+      },
+    });
+
+    return res.status(200).json({
+      message: 'Conta ativada com sucesso!',
+    });
   } catch (error) {
-    console.error('Erro:', error);
+    console.error('ERRO REAL AO ATIVAR:', error);
+
     return res.status(500).json({
       error: 'Erro ao ativar conta.',
       message: error.message,
+      code: error.code,
+      meta: error.meta,
     });
   }
 });
 
-//Login do usuário
+// Login do usuário
 router.post('/login', async (req, res) => {
-  const { email, senha } = req.body;
-
   try {
-    //1. Fazer a validação básica
+    const { email, senha } = req.body;
+
     const camposValidacao = [
       { valor: email, campoNome: 'E-mail' },
       { valor: senha, campoNome: 'Senha' },
@@ -90,30 +100,44 @@ router.post('/login', async (req, res) => {
     const campoVazio = camposValidacao.find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
-      return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
+      return res.status(400).json({
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
     }
 
-    //2. Fazer a busca do usuário
     const usuario = await prisma.usuario.findUnique({
       where: { email: email.trim() },
     });
 
     if (!usuario) {
-      return res.status(400).json({ error: 'Credenciais inválidas. Tente novamente.' });
+      return res.status(400).json({
+        error: 'O E-mail não foi encontrado. Tente novamente.',
+      });
     }
 
-    //3. Fazer a validação de segurança básicas
+    if (!usuario.ativo) {
+      return res.status(400).json({
+        error: 'Conta ainda não ativada.',
+      });
+    }
+
+    if (!usuario.senha_hash) {
+      return res.status(400).json({
+        error: 'Conta sem senha cadastrada. Ative sua conta primeiro.',
+      });
+    }
+
     const senhaValida = await bcrypt.compare(senha, usuario.senha_hash);
 
     if (!senhaValida) {
-      return res.status(400).json({ error: 'Credenciais inválidas. Tente novamente.' });
+      return res.status(400).json({
+        error: 'Senha incorreta. Tente novamente.',
+      });
     }
 
-    //4. Fazer a descoberta dinâmica do tipo de usuário (admin, aluno ou professor)
     let tipo = 'USER';
     let papelId = null;
 
-    //Busca paralelas otimizadas (só serão disparadas após a senha estar correta)
     const [admin, professor, aluno] = await Promise.all([
       prisma.admin.findUnique({ where: { usuario_id: usuario.id } }),
       prisma.professor.findUnique({ where: { usuario_id: usuario.id } }),
@@ -131,29 +155,40 @@ router.post('/login', async (req, res) => {
       papelId = aluno.id;
     }
 
-    //5. Gerar o Token JWT
     const tokenPayload = {
       usuario_id: usuario.id.toString(),
       email: usuario.email,
       tipo,
-      academia_id: usuario.academia_id.toString(),
-      [`${tipo.toLowerCase()}_id`]: papelId?.toString() || null, //Cria dinamicamente a propriedade
+      academia_id: usuario.academia_id?.toString() || null,
+      admin_id: null,
+      professor_id: null,
+      aluno_id: null,
     };
 
-    ['admin_id', 'professor_id', 'aluno_id'].forEach((key) => {
-      if (!(key in tokenPayload)) tokenPayload[key] = null; //Garante que as outras chaves de ID existam como null
+    if (tipo === 'ADMIN') {
+      tokenPayload.admin_id = papelId?.toString() || null;
+    }
+
+    if (tipo === 'PROFESSOR') {
+      tokenPayload.professor_id = papelId?.toString() || null;
+    }
+
+    if (tipo === 'ALUNO') {
+      tokenPayload.aluno_id = papelId?.toString() || null;
+    }
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: '7d',
     });
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    //6. Obter resposta de sucesso
-    return res.json({
+    return res.status(200).json({
       token,
       tipo,
       usuario: formatBigInt(usuario),
     });
   } catch (error) {
     console.error('Erro:', error);
+
     return res.status(500).json({
       error: 'Não é possível fazer o login.',
       message: error.message,
@@ -161,54 +196,76 @@ router.post('/login', async (req, res) => {
   }
 });
 
-//Solicitar o código de verificação para recuperar a senha
+// Solicitar código de verificação
 router.post('/solicitacao-codigo', async (req, res) => {
-  const { telefone } = req.body;
+  try {
+    const { telefone } = req.body;
 
-  //1. Fazer a validação básica
-  if (!telefone?.trim()) {
-    return res.status(400).json({ error: 'O campo "Telefone" é obrigatório.' });
-  }
+    if (!telefone?.trim()) {
+      return res.status(400).json({
+        error: 'O campo "Telefone" é obrigatório.',
+      });
+    }
 
-  const codigoVerificacao = await solicitarCodigoVerificacao(telefone);
+    const codigoVerificacao = await solicitarCodigoVerificacao(telefone);
 
-  if (!codigoVerificacao.success) {
-    return res.status(400).json({
-      error: 'Não foi possível receber o código de verificação.',
-      message: codigoVerificacao.error,
+    if (!codigoVerificacao.success) {
+      return res.status(400).json({
+        error: codigoVerificacao.error,
+      });
+    }
+
+    return res.status(200).json({
+      message: codigoVerificacao.message,
+    });
+  } catch (error) {
+    console.error('Erro:', error);
+
+    return res.status(500).json({
+      error: 'Erro ao solicitar código de verificação.',
+      message: error.message,
     });
   }
-
-  return res.status(200).json({ message: codigoVerificacao.message });
 });
 
-//Redefinir a senha
+// Redefinir senha
 router.post('/redefinicao-senha', async (req, res) => {
-  const { codigoVerificacao, novaSenha } = req.body;
-
-  //1. Fazer a validação básica
-  const validacaoBasica = [
-    { valor: codigoVerificacao, campoNome: 'Código de Verificação' },
-    { valor: novaSenha, campoNome: 'Senha' },
-  ];
-
-  const campoVazio = validacaoBasica.find((campo) => {
-    if (typeof campo.valor === 'string') return !campo.valor.trim();
-  });
-
-  if (campoVazio) {
-    return res.status(400).json({ error: `O campo "${campoVazio.campoNome}" é obrigatório.` });
-  }
-
   try {
+    const { codigoVerificacao, novaSenha } = req.body;
+
+    const validacaoBasica = [
+      { valor: codigoVerificacao, campoNome: 'Código de Verificação' },
+      { valor: novaSenha, campoNome: 'Senha' },
+    ];
+
+    const campoVazio = validacaoBasica.find((campo) => !campo.valor?.trim());
+
+    if (campoVazio) {
+      return res.status(400).json({
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
+    }
+
+    if (!regexSenha.test(novaSenha)) {
+      return res.status(400).json({
+        error: 'A senha deve ter no mínimo 8 caracteres, com pelo menos 1 letra e 1 número.',
+      });
+    }
+
     const senhaRedefinida = await redefinirSenha(codigoVerificacao, novaSenha);
 
     if (!senhaRedefinida.success) {
-      return res.status(400).json({ error: senhaRedefinida.error });
+      return res.status(400).json({
+        error: senhaRedefinida.error,
+      });
     }
 
-    return res.status(200).json({ message: senhaRedefinida.message });
+    return res.status(200).json({
+      message: senhaRedefinida.message,
+    });
   } catch (error) {
+    console.error('Erro:', error);
+
     return res.status(500).json({
       error: 'Erro ao redefinir a senha.',
       message: error.message,

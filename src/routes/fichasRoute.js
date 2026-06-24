@@ -142,8 +142,7 @@ router.get('/aluno/:id', auth, async (req, res) => {
     //1. Validar se o ID enviado é um número válido antes de converter para BigInt
     if (isNaN(Number(aluno_id))) {
       return res.status(400).json({
-        error: 'Erro no sistema.',
-        message: 'O ID do aluno é inválido.',
+        error: 'O ID do aluno é inválido.',
       });
     }
 
@@ -327,7 +326,6 @@ router.put('/:id/vincular-aluno', auth, async (req, res) => {
 
     if (!aluno) {
       return res.status(404).json({
-        error: 'Falha na busca.',
         message: 'Aluno não encontrado',
       });
     }
@@ -367,7 +365,6 @@ router.put('/:id/desvincular-aluno', auth, async (req, res) => {
 
     if (!fichaTreinoExiste) {
       return res.status(404).json({
-        error: 'Falha na busca.',
         message: 'Ficha de treino não encontrada.',
       });
     }

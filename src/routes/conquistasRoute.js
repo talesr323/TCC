@@ -33,8 +33,7 @@ router.post('/', auth, async (req, res) => {
 
     if (campoVazio) {
       return res.status(400).json({
-        error: 'Cadastro negado.',
-        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
       });
     }
 
@@ -88,8 +87,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     if (!conquistaExiste) {
       return res.status(400).json({
-        error: 'Alteração negada.',
-        message: 'Conquista não encontrada.',
+        error: 'Conquista não encontrada.',
       });
     }
 
@@ -132,8 +130,7 @@ router.delete('/:id', auth, async (req, res) => {
 
     if (!conquistaExiste) {
       return res.status(400).json({
-        error: 'Falha na exclusão.',
-        message: 'Conquista não encontrada.',
+        error: 'Conquista não encontrada.',
       });
     }
 

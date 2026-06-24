@@ -1,6 +1,7 @@
 import auth from '../middlewares/auth.js';
 import express from 'express';
 import prisma from '../../prisma/client.js';
+import e from 'express';
 
 const router = express.Router();
 
@@ -28,8 +29,7 @@ router.post('/', auth, async (req, res) => {
 
     if (campoVazio) {
       return res.status(400).json({
-        error: 'Falha no cadastro.',
-        message: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+        error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
       });
     }
 
@@ -44,8 +44,7 @@ router.post('/', auth, async (req, res) => {
 
     if (exercicioExiste) {
       return res.status(400).json({
-        error: 'Falha no cadastro.',
-        message: 'Esse exercício já foi cadastrado.',
+        error: 'Esse exercício já foi cadastrado.',
       });
     }
 
@@ -122,8 +121,7 @@ router.get('/', auth, async (req, res) => {
 
       if (!exerciciosPorNome) {
         return res.status(404).json({
-          error: 'Erro no sistema.',
-          message: 'O exercício não existe.',
+          error: 'O exercício não existe.',
         });
       }
 
@@ -153,8 +151,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     if (!exercicioExiste) {
       return res.status(400).json({
-        error: 'Alteração negada.',
-        message: 'O exercício não existe.',
+        error: 'O exercício não existe.',
       });
     }
 
@@ -197,8 +194,7 @@ router.delete('/:id', auth, async (req, res) => {
     //1.1. Se o exercício não existir
     if (!exercicioExiste) {
       return res.status(400).json({
-        error: 'Falha na exclusão.',
-        message: 'Exercício não encontrado.',
+        error: 'Exercício não encontrado.',
       });
     }
 
@@ -215,8 +211,7 @@ router.delete('/:id', auth, async (req, res) => {
 
     if (error.code === 'P2003') {
       return res.status(400).json({
-        error: 'Não é possível excluir exercício:',
-        message: 'O exercício está em uso na ficha.',
+        error: 'O exercício está em uso na ficha.',
       });
     }
 
