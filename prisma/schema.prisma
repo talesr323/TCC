@@ -13,19 +13,13 @@ enum Nivel {
   AVANCADO
 }
 
-enum StatusAluno {
-  ATIVO
-  INATIVO
-}
-
 model Usuario {
   id         BigInt   @id @default(autoincrement())
+  nome       String   @db.VarChar(150)
   email      String   @unique @db.VarChar(150)
   cpf        String   @unique @db.Char(255)
   senha_hash String?  @db.VarChar(255)
-  nome       String   @db.VarChar(150)
-  telefone   String?  @db.VarChar(20)
-  foto_perfil String? @db.VarChar(255)
+  telefone   String   @unique @db.VarChar(20)
   ativo      Boolean  @default(false)
 
   academia_id BigInt
@@ -40,8 +34,7 @@ model Usuario {
 
   tokens     TokenAtivacao[]
 
-  senha_atual     UsuarioSenha?
-  recuperacoes    SenhaRecuperada[]
+  codigos_verificacao    CodigoVerificacao[]
 
   @@map("usuarios")
 }
@@ -51,7 +44,6 @@ model Admin {
   usuario_id BigInt  @unique
 
   usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-  relatorios Relatorio[]
 
   @@map("admins")
 }
@@ -124,7 +116,7 @@ model Exercicio {
   criado_por    BigInt
 
   professor Professor @relation(fields: [criado_por], references: [id])
-  fichas     FichaExercicio[]
+  fichas    FichaExercicio[]
 
   @@map("exercicios")
 }
@@ -143,33 +135,24 @@ model FichaExercicio {
 
   registros  RegistroTreino[]
 
-  @@map("ficha_exercicios")
+  @@map("fichas_exercicios")
 }
 
 model RegistroTreino {
   id                BigInt   @id @default(autoincrement())
   aluno_id          BigInt
   ficha_exercicio_id BigInt
+  execucao_id       BigInt
   carga_real        Decimal? @db.Decimal(6,2)
-  repeticoes_real   Int?
   data_execucao     DateTime @default(now())
 
   aluno        Aluno          @relation(fields: [aluno_id], references: [id])
   fichaExercicio FichaExercicio @relation(fields: [ficha_exercicio_id], references: [id], onDelete: Cascade)
+  execucao_ficha ExecucaoFicha  @relation(fields: [execucao_id], references: [id], onDelete: Cascade)
 
-  @@map("registro_treino")
-}
+  @@unique([execucao_id, ficha_exercicio_id], name: "execucao_id_ficha_exercicio_id")
 
-model Relatorio {
-  id           BigInt   @id @default(autoincrement())
-  tipo         String   @db.VarChar(100)
-  referencia_id BigInt?
-  gerado_por   BigInt
-  data_geracao DateTime @default(now())
-
-  admin Admin @relation(fields: [gerado_por], references: [id])
-
-  @@map("relatorios")
+  @@map("registros_treino")
 }
 
 model TokenAtivacao {
@@ -201,7 +184,9 @@ model Academia {
 }
 
 enum StatusExecucao {
+  NAO_INICIADA
   EM_ANDAMENTO
+  INCOMPLETA
   FINALIZADA
   CANCELADA
 }
@@ -215,10 +200,14 @@ model ExecucaoFicha {
   iniciado_em    DateTime @default(now())
   finalizado_em  DateTime?
 
-  status         StatusExecucao @default(EM_ANDAMENTO)
+  status         StatusExecucao @default(NAO_INICIADA)
 
   ficha          FichaTreino @relation(fields: [ficha_id], references: [id])
   aluno          Aluno @relation(fields: [aluno_id], references: [id])
+
+  registros      RegistroTreino[]
+
+  @@map("execucao_ficha")
 }
 
 model Conquista {
@@ -228,6 +217,8 @@ model Conquista {
   descricao   String
 
   alunos      AlunoConquista[]
+
+  @@map("conquistas")
 }
 
 model AlunoConquista {
@@ -237,32 +228,22 @@ model AlunoConquista {
   recebido_em   DateTime @default(now())
 
   aluno         Aluno @relation(fields: [aluno_id], references: [id])
-  conquista     Conquista @relation(fields: [conquista_id], references: [id])
+  conquista     Conquista @relation(fields: [conquista_id], references: [id], onDelete: Cascade)
 
   @@id([aluno_id, conquista_id])
+
+  @@map("aluno_conquistas")
 }
 
-model UsuarioSenha{
-  id BigInt @id @default(autoincrement())
-  usuario_id BigInt @unique
-  senha_hash String @db.VarChar(255)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-
-  @@map("usuario_senhas")
-}
-
-model SenhaRecuperada {
-  id         BigInt   @id @default(autoincrement())
-  usuario_id BigInt
-  token      String   @unique @db.VarChar(255)
-  expira_em  DateTime
-  usado      Boolean  @default(false)
-  created_at DateTime @default(now())
+model CodigoVerificacao {
+  id                     BigInt   @id @default(autoincrement())
+  usuario_id             BigInt
+  codigo_verificacao     String   @unique @db.VarChar(255)
+  expira_em              DateTime
+  usado                  Boolean  @default(false)
+  created_at             DateTime @default(now())
 
   usuario    Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
-  @@map("senhas_recuperadas")
+  @@map("codigos_verificacao")
 }

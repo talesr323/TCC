@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export async function redefinirSenha(codigoVerificacao, senhaNova) {
   try {
     // 1. Buscar o código de verificacao
-    const codigoRecebido = await prisma.senhaRecuperada.findUnique({
+    const codigoRecebido = await prisma.codigoVerificacao.findUnique({
       where: { token: codigoVerificacao },
     });
 
@@ -25,11 +25,11 @@ export async function redefinirSenha(codigoVerificacao, senhaNova) {
 
     await prisma.$transaction([
       prisma.usuario.update({
-        where: { id: codigoRecebido.usuario_id },
+        where: { id: codigoVerificacao.usuario_id },
         data: { senha_hash: hashedPassword },
       }),
 
-      prisma.senhaRecuperada.update({
+      prisma.codigoVerificacao.update({
         where: { token: codigoVerificacao },
         data: { usado: true },
       }),

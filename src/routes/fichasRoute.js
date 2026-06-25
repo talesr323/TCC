@@ -1,22 +1,30 @@
 import auth from '../middlewares/auth.js';
 import express from 'express';
 import prisma from '../../prisma/client.js';
+import { parse } from 'date-fns'; // Importando a função de conversão
 
 const router = express.Router();
 
-//Função para tratar BigInt
+// Função auxiliar para converter strings DD-MM-YYYY ou DD/MM/YYYY para Objeto Date
+const parseDataBr = (dataString) => {
+  if (!dataString) return undefined;
+  // Substitui barras por hífens caso o usuário mande "25/06/2026"
+  const stringPadronizada = dataString.replace(/\//g, '-');
+  return parse(stringPadronizada, 'dd-MM-yyyy', new Date());
+};
+
+// Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
-//Criar uma ficha de treino
+// 1. Criar uma ficha de treino
 router.post('/', auth, async (req, res) => {
   try {
     const professor_id = req.usuario.professor_id;
     const { nome, aluno_id, grupo_id, data_inicio, data_fim, exercicios } = req.body;
 
-    //1. Fazer a validação básica dos campos obrigatórios
     if (!nome?.trim()) {
       return res.status(400).json({ error: "O campo 'Nome' é obrigatório." });
     }
@@ -24,18 +32,18 @@ router.post('/', auth, async (req, res) => {
     if (!exercicios || !Array.isArray(exercicios) || exercicios.length === 0) {
       return res
         .status(400)
-        .json({ error: 'A ficha de treino deve conter pelo menos um exercício.' }); //Obriga o usuário a adicionar pelo menos um exercício na ficha
+        .json({ error: 'A ficha de treino deve conter pelo menos um exercício.' });
     }
 
-    //2. Criar a ficha de treino
     const novaFicha = await prisma.fichaTreino.create({
       data: {
         nome,
         aluno_id: aluno_id ? BigInt(aluno_id) : null,
         professor_id: professor_id ? BigInt(professor_id) : null,
         grupo_id: grupo_id ? BigInt(grupo_id) : null,
-        data_inicio,
-        data_fim,
+        // CORREÇÃO: Tratando as datas na criação
+        data_inicio: parseDataBr(data_inicio),
+        data_fim: parseDataBr(data_fim),
 
         exercicios: {
           create:
@@ -67,22 +75,21 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-//Listar todas as fichas de treino (com opção de filtrar por nível)
-router.get('/nivel/:nivel', auth, async (req, res) => {
+// 2. Listar todas as fichas de treino (com opção de filtrar por nível)
+router.get('/nivel', auth, async (req, res) => {
   try {
     const professor_id = req.usuario.professor_id;
     const { nivel } = req.query;
 
     const fichasTreino = await prisma.fichaTreino.findMany({
       where: {
-        professor_id,
+        professor_id: professor_id ? BigInt(professor_id) : undefined,
         ...(nivel && {
           grupo: {
             nivel: nivel,
           },
         }),
       },
-
       include: {
         aluno: true,
         grupo: true,
@@ -94,7 +101,7 @@ router.get('/nivel/:nivel', auth, async (req, res) => {
       },
     });
 
-    res.json(fichasTreino);
+    res.json(formatBigInt(fichasTreino));
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
@@ -104,49 +111,19 @@ router.get('/nivel/:nivel', auth, async (req, res) => {
   }
 });
 
-//Buscar a ficha de treino por nome
-router.get('/', auth, async (req, res) => {
+// 3. Buscar as fichas de treino por ID do aluno
+// BUGFIX: Movido para cima do GET genérico para evitar conflito de rotas
+router.get('/aluno/:aluno_id', auth, async (req, res) => {
   try {
-    const { nome } = req.query;
+    // BUGFIX ORIGINAL: Você pegava do req.query mas o parâmetro está na URL (:aluno_id), ou seja, req.params
+    const { aluno_id } = req.params;
 
-    //2. Buscar por nome
-    if (nome && String(nome).trim() !== '') {
-      const fichasTreinoPorNome = await prisma.fichaTreino.findMany({
-        where: {
-          nome: {
-            contains: String(nome),
-          },
-        },
-      });
-
-      if (!fichasTreinoPorNome) {
-        return res.status(404).json({ error: 'Ficha de treino não encontrada.' });
-      }
-
-      return res.status(200).json(fichasTreinoPorNome);
-    }
-  } catch (error) {
-    console.error('Erro:', error);
-    return res.status(500).json({
-      error: 'Erro ao buscar ficha de treino.',
-      message: error.message,
-    });
-  }
-});
-
-// Buscar as fichas de treino por ID do aluno
-router.get('/aluno/:id', auth, async (req, res) => {
-  try {
-    const { aluno_id } = req.query;
-
-    //1. Validar se o ID enviado é um número válido antes de converter para BigInt
     if (isNaN(Number(aluno_id))) {
       return res.status(400).json({
         error: 'O ID do aluno é inválido.',
       });
     }
 
-    //2. Buscar todas as fichas associadas ao aluno_id
     const fichasTreinoDoAluno = await prisma.fichaTreino.findMany({
       where: {
         aluno_id: BigInt(aluno_id),
@@ -161,7 +138,7 @@ router.get('/aluno/:id', auth, async (req, res) => {
       },
     });
 
-    return res.status(200).json(fichasTreinoDoAluno);
+    return res.status(200).json(formatBigInt(fichasTreinoDoAluno));
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
@@ -171,32 +148,56 @@ router.get('/aluno/:id', auth, async (req, res) => {
   }
 });
 
-//Atualizar ficha de treino
+// 4. Buscar a ficha de treino por nome
+router.get('/', auth, async (req, res) => {
+  try {
+    const { nome } = req.query;
+
+    if (nome && String(nome).trim() !== '') {
+      const fichasTreinoPorNome = await prisma.fichaTreino.findMany({
+        where: {
+          nome: {
+            contains: String(nome),
+          },
+        },
+      });
+
+      return res.status(200).json(formatBigInt(fichasTreinoPorNome));
+    }
+
+    return res.status(400).json({ error: "Parâmetro 'nome' não informado." });
+  } catch (error) {
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar ficha de treino.',
+      message: error.message,
+    });
+  }
+});
+
+// 5. Atualizar ficha de treino
 router.patch('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, grupo_id, data_inicio, data_fim } = req.body;
 
-    //1. Verificar se o exercício existe
     const fichaTreinoExiste = await prisma.fichaTreino.findFirst({
-      where: {
-        id: BigInt(id),
-      },
+      where: { id: BigInt(id) },
     });
 
     if (!fichaTreinoExiste) {
       return res.status(404).json({ error: 'Ficha de treino não encontrada.' });
     }
 
-    //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Exercicio
     const dadosFichaTreino = {};
 
     if (nome !== undefined) dadosFichaTreino.nome = nome;
-    if (grupo_id !== undefined) dadosFichaTreino.grupo_id = grupo_id;
-    if (data_inicio !== undefined) dadosFichaTreino.data_inicio = data_inicio;
-    if (data_fim !== undefined) dadosFichaTreino.data_fim = data_fim;
+    if (grupo_id !== undefined) dadosFichaTreino.grupo_id = BigInt(grupo_id);
 
-    //3. Executar a atualização no banco de dados
+    // CORREÇÃO: Aplicando o date-fns no update dinâmico
+    if (data_inicio !== undefined) dadosFichaTreino.data_inicio = parseDataBr(data_inicio);
+    if (data_fim !== undefined) dadosFichaTreino.data_fim = parseDataBr(data_fim);
+
     const fichaTreinoAtualizada = await prisma.fichaTreino.update({
       where: { id: BigInt(id) },
       data: dadosFichaTreino,
@@ -204,7 +205,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     return res.status(200).json({
       message: 'Ficha de treino atualizada com sucesso.',
-      exercicio: formatBigInt(fichaTreinoAtualizada),
+      ficha: formatBigInt(fichaTreinoAtualizada), // Ajustado termo aqui
     });
   } catch (error) {
     console.error('Erro:', error);
@@ -215,23 +216,20 @@ router.patch('/:id', auth, async (req, res) => {
   }
 });
 
-//Adicionar exercicio em uma ficha
+// 6. Adicionar exercicio em uma ficha
 router.post('/:id/exercicios', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { exercicio_id, series, repeticoes, descanso_segundos, carga_sugerida } = req.body;
 
-    //1. Verificar se o exercício realmente existe no banco de dados
     const exercicioExiste = await prisma.exercicio.findUnique({
       where: { id: BigInt(exercicio_id) },
     });
 
-    //1.1 Se não existir, retorna um erro 404 imediatamente
     if (!exercicioExiste) {
       return res.status(404).json({ erro: 'O exercício informado não existe.' });
     }
 
-    //2. Adicionar o exercício
     const exercicio = await prisma.fichaExercicio.create({
       data: {
         ficha_id: BigInt(id),
@@ -243,9 +241,7 @@ router.post('/:id/exercicios', auth, async (req, res) => {
       },
       include: {
         exercicio: {
-          select: {
-            nome: true,
-          },
+          select: { nome: true },
         },
       },
     });
@@ -263,13 +259,12 @@ router.post('/:id/exercicios', auth, async (req, res) => {
   }
 });
 
-//Atualizar o exercício da ficha de treino
+// 7. Atualizar o exercício da ficha de treino
 router.patch('/exercicios/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { series, repeticoes, descanso_segundos, carga_sugerida } = req.body;
 
-    //1. Criar um objeto dinâmico com os campos que serão atualizados na tabela FichaExercício
     const dadosFichaExercicio = {};
 
     if (series !== undefined) dadosFichaExercicio.series = series;
@@ -277,14 +272,14 @@ router.patch('/exercicios/:id', auth, async (req, res) => {
     if (descanso_segundos !== undefined) dadosFichaExercicio.descanso_segundos = descanso_segundos;
     if (carga_sugerida !== undefined) dadosFichaExercicio.carga_sugerida = carga_sugerida;
 
-    //2. Executar a atualização no banco de dados
-    const FichaExercicioAtualizada = await prisma.fichaExercicio.update({
+    const fichaExercicioAtualizada = await prisma.fichaExercicio.update({
       where: { id: BigInt(id) },
       data: dadosFichaExercicio,
     });
 
     return res.status(200).json({
-      message: 'Exercício atualizados com sucesso.',
+      message: 'Exercício atualizado com sucesso.',
+      // BUGFIX ORIGINAL: Sua variável começava com 'F' maiúsculo e quebrava aqui
       exercicio: formatBigInt(fichaExercicioAtualizada),
     });
   } catch (error) {
@@ -296,11 +291,16 @@ router.patch('/exercicios/:id', auth, async (req, res) => {
   }
 });
 
-//Remover exercício da ficha
-router.delete('/exercicios/:id', auth, async (req, res) => {
+// 8. Remover exercício da ficha
+router.delete('/:id/exercicios/:exercicio_id', auth, async (req, res) => {
   try {
-    await prisma.fichaExercicio.delete({
-      where: { id: BigInt(req.params.id) },
+    const { id, exercicio_id } = req.params;
+
+    await prisma.fichaExercicio.deleteMany({
+      where: {
+        id: BigInt(id),
+        exercicio_id: BigInt(exercicio_id),
+      },
     });
     res.json({ mensagem: 'Exercício removido com sucesso' });
   } catch (error) {
@@ -312,35 +312,33 @@ router.delete('/exercicios/:id', auth, async (req, res) => {
   }
 });
 
+// 9. Vincular Aluno
 router.put('/:id/vincular-aluno', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { aluno_id } = req.body;
 
-    //1. Verificar se o aluno realmente existe no banco de dados
+    const fichaTreinoExiste = await prisma.fichaTreino.findUnique({
+      where: { id: BigInt(id) },
+    });
+
+    if (!fichaTreinoExiste) {
+      return res.status(404).json({ message: 'Ficha de treino não encontrada.' });
+    }
+
     const aluno = await prisma.aluno.findUnique({
-      where: {
-        id: BigInt(aluno_id),
-      },
+      where: { id: BigInt(aluno_id) },
     });
 
     if (!aluno) {
-      return res.status(404).json({
-        message: 'Aluno não encontrado',
-      });
+      return res.status(404).json({ message: 'Aluno não encontrado' });
     }
 
-    //2. Atualizar a Ficha de Treino injetando o BigInt do aluno_id
     const ficha = await prisma.fichaTreino.update({
-      where: {
-        id: BigInt(id),
-      },
-      data: {
-        aluno_id: BigInt(aluno_id),
-      },
+      where: { id: BigInt(id) },
+      data: { aluno_id: BigInt(aluno_id) },
     });
 
-    //3. Retornar a ficha atualizada
     res.json(formatBigInt(ficha));
   } catch (error) {
     console.error('Erro:', error);
@@ -351,40 +349,27 @@ router.put('/:id/vincular-aluno', auth, async (req, res) => {
   }
 });
 
-//Desvincular ficha a um aluno
-router.put('/:id/desvincular-aluno', auth, async (req, res) => {
+// 10. Desvincular ficha a um aluno
+router.delete('/:id/desvincular-aluno/:aluno_id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id, aluno_id } = req.params;
 
-    //1. Verificar se a ficha realmente existe antes de tentar atualizar
-    const fichaTreinoExiste = await prisma.fichaTreino.findUnique({
+    const fichaTreinoVinculada = await prisma.fichaTreino.findUnique({
       where: {
         id: BigInt(id),
+        aluno_id: BigInt(aluno_id),
       },
     });
 
-    if (!fichaTreinoExiste) {
+    if (!fichaTreinoVinculada) {
       return res.status(404).json({
-        message: 'Ficha de treino não encontrada.',
+        message: 'Esta ficha de treino não foi vinculada a esse aluno.',
       });
     }
 
-    //2. Verificar se a ficha já está desvinculada (opcional, mas boa prática)
-    if (fichaTreinoExiste.aluno_id === null) {
-      return res.status(400).json({
-        error: 'Erro no sistema.',
-        message: 'Esta ficha de treino já não está vinculada a nenhum aluno.',
-      });
-    }
-
-    //3. Atualizar a ficha definindo o aluno_id como null
     const fichaTreinoAtualizada = await prisma.fichaTreino.update({
-      where: {
-        id: BigInt(id),
-      },
-      data: {
-        aluno_id: null, //Remove o vínculo com o aluno
-      },
+      where: { id: BigInt(id) },
+      data: { aluno_id: null },
     });
 
     res.json({
@@ -400,7 +385,7 @@ router.put('/:id/desvincular-aluno', auth, async (req, res) => {
   }
 });
 
-//Excluir ficha
+// 11. Excluir ficha
 router.delete('/:id', auth, async (req, res) => {
   try {
     await prisma.fichaTreino.delete({

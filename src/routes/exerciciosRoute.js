@@ -71,7 +71,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 //Listar todos os exercícios (com opção de filtrar por grupo muscular)
-router.get('/grupo-muscular/:grupo_muscular', auth, async (req, res) => {
+router.get('/grupo-muscular/', auth, async (req, res) => {
   try {
     //1. Capturar o grupo muscular dos parâmetros da URL (Ex: /exercicios?grupo_muscular=Pernas)
     const { grupo_muscular } = req.query;
@@ -105,7 +105,7 @@ router.get('/grupo-muscular/:grupo_muscular', auth, async (req, res) => {
 });
 
 // Buscar exercício por nome
-router.get('/:nome', auth, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { nome } = req.query;
 

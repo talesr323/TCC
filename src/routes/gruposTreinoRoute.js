@@ -18,7 +18,7 @@ router.post('/', auth, async (req, res) => {
 
     //1. Fazer a validação básica dos campos obrigatórios
     if (!nome?.trim()) {
-      return res.statusCode(400).json({ error: "O campo 'Grupo de Treino' é obrigatório" });
+      return res.status(400).json({ error: "O campo 'Grupo de Treino' é obrigatório" });
     }
 
     //2. Verificar a existência do grupo de treino
@@ -26,7 +26,7 @@ router.post('/', auth, async (req, res) => {
       where: { nome: { equals: nome.trim() } },
     });
 
-    if (grupoExiste) {
+    if (grupoTreinoExiste) {
       return res.status(409).json({
         error: 'Já existe um grupo de treino cadastrado com esse nome.',
       });
@@ -55,7 +55,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 //Listar todos os grupos de treino (com opção de filtrar por nível)
-router.get('/nivel/:nivel', auth, async (req, res) => {
+router.get('/nivel', auth, async (req, res) => {
   try {
     //1. Capturar o nível dos parâmetros da URL
     const { nivel } = req.query;
@@ -87,7 +87,7 @@ router.get('/nivel/:nivel', auth, async (req, res) => {
 });
 
 // Buscar exercício por nome
-router.get('/:nome', auth, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { nome } = req.query;
 
@@ -152,7 +152,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     return res.status(200).json({
       message: 'Grupo de treino atualizados com sucesso.',
-      exercicio: formatBigInt(exercicioAtualizado),
+      exercicio: formatBigInt(grupoTreinoAtualizado),
     });
   } catch (error) {
     console.error('Erro:', error);

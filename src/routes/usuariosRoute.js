@@ -21,7 +21,7 @@ const formatBigInt = (data) =>
 //Cadastrar usuário (com token, mas sem senha)
 router.post('/', auth, admin, async (req, res) => {
   try {
-    const { nome, email, cpf, tipo, cref, telefone, foto_perfil } = req.body;
+    const { nome, email, cpf, tipo, cref, telefone } = req.body;
 
     //1. Fazer a validação básica (verificar se o campo obrigatório foi preenchido)
     const validacaoBasica = [
@@ -29,6 +29,7 @@ router.post('/', auth, admin, async (req, res) => {
       { valor: email, campoNome: 'E-mail' },
       { valor: cpf, campoNome: 'CPF' },
       { valor: tipo, campoNome: 'Tipo' },
+      { valor: telefone, campoNome: 'Telefone' },
     ];
 
     const campoVazio = validacaoBasica.find((campo) => {
@@ -47,6 +48,21 @@ router.post('/', auth, admin, async (req, res) => {
       return res.status(400).json({
         error: 'Cadastro negado.',
         message: 'CPF inválido.',
+      });
+    }
+
+    //1.2. Verificar se o telefone já foi cadastrado
+    const telefoneExiste = await prisma.usuario.findFirst({
+      where: {
+        telefone: {
+          equals: telefone.trim(),
+        },
+      },
+    });
+
+    if (telefoneExiste) {
+      return res.status(400).json({
+        error: 'Esse telefone já foi cadastrado.',
       });
     }
 
@@ -78,7 +94,6 @@ router.post('/', auth, admin, async (req, res) => {
         email,
         cpf,
         telefone,
-        foto_perfil,
         ativo: false,
         academia_id: req.usuario.academia_id,
       },
@@ -142,7 +157,7 @@ router.post('/', auth, admin, async (req, res) => {
 });
 
 //Listar todos os usuários (com opção de filtrar por tipo)
-router.get('/tipo/:tipo', auth, async (req, res) => {
+router.get('/tipo/', auth, async (req, res) => {
   try {
     const { tipo } = req.query;
     const { academia_id } = req.usuario; //Garante que só busca usuários da mesma academia do adm logado
@@ -192,7 +207,7 @@ router.get('/tipo/:tipo', auth, async (req, res) => {
 });
 
 //Buscar usuário por nome
-router.get('/:nome', auth, async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const { nome } = req.query;
     const academiaId = req.usuario.academia_id;

@@ -39,6 +39,7 @@ router.post('/', async (req, res) => {
       { valor: nome, campoNome: 'Nome' },
       { valor: email, campoNome: 'E-mail' },
       { valor: cpf, campoNome: 'CPF' },
+      { valor: telefone, campoNome: 'Telefone' },
       { valor: senha, campoNome: 'Senha' },
     ];
 
@@ -64,6 +65,21 @@ router.post('/', async (req, res) => {
 
     if (campoInvalido) {
       return res.status(400).json({ error: `O campo "${campoInvalido.campoNome}" é inválido.` });
+    }
+
+    //1.2. Verificar se o telefone já foi cadastrado
+    const telefoneExiste = await prisma.usuario.findFirst({
+      where: {
+        telefone: {
+          equals: telefone.trim(),
+        },
+      },
+    });
+
+    if (telefoneExiste) {
+      return res.status(400).json({
+        error: 'Esse telefone já foi cadastrado.',
+      });
     }
 
     //2. Verificar se o sistema já foi inicializado
@@ -115,6 +131,25 @@ router.post('/', async (req, res) => {
     return res.status(500).json({
       error: 'Erro ao inicializar o sistema.',
       message: error.message,
+    });
+  }
+});
+
+//Checar a inicialização do aplicativo
+router.get('/inicializado', async (req, res) => {
+  try {
+    const admin = await prisma.admin.findFirst({
+      select: {
+        id: true,
+      },
+    });
+
+    return res.json({
+      inicializado: !!admin,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Erro ao verificar inicialização',
     });
   }
 });

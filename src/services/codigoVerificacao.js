@@ -21,7 +21,7 @@ export async function solicitarCodigoVerificacao(telefone) {
     const codigoVerificacao = crypto.randomInt(100000, 999999).toString();
     const dataExpiracao = new Date(Date.now() + 30 * 60 * 1000); //Define a expiração para 30 minutos
 
-    await prisma.senhaRecuperada.create({
+    await prisma.codigoVerificacao.create({
       data: {
         token: codigoVerificacao,
         expira_em: dataExpiracao,

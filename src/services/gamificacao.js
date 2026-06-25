@@ -1,10 +1,12 @@
 import prisma from '../../prisma/client.js';
 
 export async function processarGamificacaoTreino(alunoId) {
+  const novasConquistas = [];
+
   // 1. Contar o total de treinos finalizados do aluno
   const totalTreinos = await prisma.execucaoFicha.count({
     where: {
-      aluno_id: alunoId,
+      aluno_id: BigInt(alunoId),
       status: 'FINALIZADA',
     },
   });
@@ -31,8 +33,8 @@ export async function processarGamificacaoTreino(alunoId) {
       const jaPossui = await prisma.alunoConquista.findUnique({
         where: {
           aluno_id_conquista_id: {
-            aluno_id: alunoId,
-            conquista_id: conquista.id, // Corrigido de conquista.id
+            aluno_id: BigInt(alunoId),
+            conquista_id: conquista.id,
           },
         },
       });
@@ -41,19 +43,29 @@ export async function processarGamificacaoTreino(alunoId) {
       if (!jaPossui) {
         await prisma.alunoConquista.create({
           data: {
-            aluno_id: alunoId,
+            aluno_id: BigInt(alunoId),
             conquista_id: conquista.id,
           },
         });
 
-        // Incrementa o XP bônus da conquista no perfil do Aluno
-        if (conquista.xp_bonus > 0) {
+        // Incrementa o XP bônus da conquista no perfil do Aluno (se o campo existir no banco)
+        if (conquista.xp_bonus && conquista.xp_bonus > 0) {
           await prisma.aluno.update({
-            where: { id: alunoId },
+            where: { id: BigInt(alunoId) },
             data: { experiencia: { increment: conquista.xp_bonus } },
           });
         }
+
+        // Alimenta a lista para retornar ao usuário final
+        novasConquistas.push({
+          id: conquista.id.toString(),
+          nome: conquista.nome,
+          descricao: conquista.descricao,
+        });
       }
     }
   }
+
+  // Retorna a lista de novas conquistas desbloqueadas nesta execução
+  return novasConquistas;
 }

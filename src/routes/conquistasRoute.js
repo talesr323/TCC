@@ -14,13 +14,12 @@ const formatBigInt = (data) =>
 router.post('/', auth, async (req, res) => {
   try {
     const admin_id = req.usuario.admin_id;
-    const { nome, descricao, xp_bonus } = req.body;
+    const { nome, descricao } = req.body;
 
     //1. Fazer a validação básica
     const validaçãoBasica = [
       { valor: nome, campoNome: 'Nome' },
       { valor: descricao, campoNome: 'Descrição' },
-      { valor: xp_bonus, campoNome: 'XP' },
     ];
 
     const campoVazio = validaçãoBasica.find((campo) => {
@@ -42,7 +41,6 @@ router.post('/', auth, async (req, res) => {
       data: {
         nome: nome.trim(),
         descricao,
-        xp_bonus,
       },
     });
 
@@ -66,6 +64,42 @@ router.get('/', auth, async (req, res) => {
     console.error('Erro:', error);
     return res.status(500).json({
       error: 'Erro no sistema.',
+      message: error.message,
+    });
+  }
+});
+
+// Buscar exercício por id do aluno
+// Listar todas as conquistas de um aluno específico
+router.get('/:aluno_id', auth, async (req, res) => {
+  try {
+    const { aluno_id } = req.params;
+
+    if (!aluno_id || isNaN(Number(aluno_id))) {
+      return res.status(400).json({ error: 'O ID do aluno fornecido é inválido.' });
+    }
+
+    // 1. Buscar todas as conquistas vinculadas a este aluno
+    const conquistasDoAluno = await prisma.alunoConquista.findMany({
+      where: {
+        aluno_id: BigInt(aluno_id),
+      },
+      include: {
+        conquista: true,
+      },
+    });
+
+    if (conquistasDoAluno.length === 0) {
+      return res
+        .status(404)
+        .json({ message: 'Este aluno ainda não possui nenhuma conquista cadastrada.' });
+    }
+
+    return res.status(200).json(formatBigInt(conquistasDoAluno));
+  } catch (error) {
+    console.error('Erro:', error);
+    return res.status(500).json({
+      error: 'Erro ao buscar as conquistas do aluno.',
       message: error.message,
     });
   }
@@ -96,7 +130,6 @@ router.patch('/:id', auth, async (req, res) => {
 
     if (nome !== undefined) dadosConquista.nome = nome;
     if (descricao !== undefined) dadosConquista.descricao = descricao;
-    if (xp_bonus !== undefined) dadosConquista.xp_bonus = xp_bonus;
 
     //3. Executar a atualização no banco de dados
     const conquistaAtualizada = await prisma.conquista.update({
