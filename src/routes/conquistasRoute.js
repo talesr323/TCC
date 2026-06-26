@@ -110,7 +110,7 @@ router.patch('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const admin_id = req.usuario.admin_id;
-    const { nome, descricao, xp_bonus } = req.body;
+    const { nome, descricao } = req.body;
 
     //1. Verificar se a conquista existe
     const conquistaExiste = await prisma.conquista.findFirst({
