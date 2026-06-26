@@ -215,6 +215,7 @@ model Conquista {
 
   nome        String @unique
   descricao   String
+  contagem_treinos Int @default(0) 
 
   alunos      AlunoConquista[]
 

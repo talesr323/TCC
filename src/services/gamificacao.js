@@ -14,7 +14,7 @@ export async function processarGamificacaoTreino(alunoId) {
   // 2. BUSCA AS REGRAS DINAMICAMENTE DO BANCO DE DADOS
   const conquistasRegras = await prisma.conquista.findMany({
     where: {
-      condicao_treinos: {
+      contagem_treinos: {
         not: null, // Garante que pegamos apenas conquistas que possuem essa regra por treinos
       },
     },
