@@ -139,7 +139,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     return res.status(200).json({
       message: 'Conquista atualizada com sucesso.',
-      exercicio: formatBigInt(conquistaAtualizada),
+      conquista: formatBigInt(conquistaAtualizada),
     });
   } catch (error) {
     console.error('Erro:', error);
