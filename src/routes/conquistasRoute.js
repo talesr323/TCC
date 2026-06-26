@@ -14,17 +14,17 @@ const formatBigInt = (data) =>
 router.post('/', auth, async (req, res) => {
   try {
     const admin_id = req.usuario.admin_id;
-    const { nome, descricao } = req.body;
+    const { nome, descricao, condicao_treinos } = req.body;
 
     //1. Fazer a validação básica
     const validaçãoBasica = [
       { valor: nome, campoNome: 'Nome' },
       { valor: descricao, campoNome: 'Descrição' },
+      { valor: condicao_treinos, campoNome: 'Condição de Treinos' },
     ];
 
     const campoVazio = validaçãoBasica.find((campo) => {
       if (campo.valor === null || campo.valor === undefined) return true;
-
       if (typeof campo.valor === 'string') return !campo.valor.trim();
 
       return false;
@@ -36,11 +36,20 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
+      return res
+        .status(400)
+        .json({
+          error: 'A condição de treinos deve ser um número válido e maior ou igual a zero.',
+        });
+    }
+
     //2. Criar a conquista
     const conquista = await prisma.conquista.create({
       data: {
         nome: nome.trim(),
         descricao,
+        condicao_treinos: parseInt(condicao_treinos, 10),
       },
     });
 
