@@ -11,22 +11,19 @@ const router = express.Router();
 
 const formatBigInt = (data) =>
   JSON.parse(
-    JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
+    JSON.stringify(data, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    ),
   );
 
-// Ativar conta
 router.post('/ativacao-conta', async (req, res) => {
-  console.log('CHEGOU NA ROTA DE ATIVAÇÃO');
-  console.log('BODY:', req.body);
   try {
     const { tokenAtivacao, senha } = req.body;
 
-    const validacaoBasica = [
+    const campoVazio = [
       { valor: tokenAtivacao, campoNome: 'Token de Ativação' },
       { valor: senha, campoNome: 'Senha' },
-    ];
-
-    const campoVazio = validacaoBasica.find((campo) => !campo.valor?.trim());
+    ].find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
       return res.status(400).json({
@@ -45,7 +42,6 @@ router.post('/ativacao-conta', async (req, res) => {
     if (registroToken.expira_em < new Date()) {
       return res.status(400).json({
         error: 'O token fornecido expirou. Por favor, tente novamente.',
-        expiredAt: registroToken.expira_em,
       });
     }
 
@@ -67,9 +63,7 @@ router.post('/ativacao-conta', async (req, res) => {
 
     await prisma.tokenAtivacao.updateMany({
       where: { token: tokenAtivacao.trim() },
-      data: {
-        usado: true,
-      },
+      data: { usado: true },
     });
 
     return res.status(200).json({
@@ -81,23 +75,18 @@ router.post('/ativacao-conta', async (req, res) => {
     return res.status(500).json({
       error: 'Erro ao ativar conta.',
       message: error.message,
-      code: error.code,
-      meta: error.meta,
     });
   }
 });
 
-// Login do usuário
 router.post('/login', async (req, res) => {
   try {
     const { email, senha } = req.body;
 
-    const camposValidacao = [
+    const campoVazio = [
       { valor: email, campoNome: 'E-mail' },
       { valor: senha, campoNome: 'Senha' },
-    ];
-
-    const campoVazio = camposValidacao.find((campo) => !campo.valor?.trim());
+    ].find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
       return res.status(400).json({
@@ -135,47 +124,43 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    let tipo = 'USER';
-    let papelId = null;
-
     const [admin, professor, aluno] = await Promise.all([
       prisma.admin.findUnique({ where: { usuario_id: usuario.id } }),
       prisma.professor.findUnique({ where: { usuario_id: usuario.id } }),
       prisma.aluno.findUnique({ where: { usuario_id: usuario.id } }),
     ]);
 
+    let tipo = 'USER';
+    let admin_id = null;
+    let professor_id = null;
+    let aluno_id = null;
+
     if (admin) {
       tipo = 'ADMIN';
-      papelId = admin.id;
+      admin_id = admin.id.toString();
     } else if (professor) {
       tipo = 'PROFESSOR';
-      papelId = professor.id;
+      professor_id = professor.id.toString();
     } else if (aluno) {
       tipo = 'ALUNO';
-      papelId = aluno.id;
+      aluno_id = aluno.id.toString();
     }
+
+    console.log('LOGIN USUARIO:', usuario.email);
+    console.log('ADMIN:', !!admin);
+    console.log('PROFESSOR:', !!professor);
+    console.log('ALUNO:', !!aluno);
+    console.log('TIPO RETORNADO:', tipo);
 
     const tokenPayload = {
       usuario_id: usuario.id.toString(),
       email: usuario.email,
       tipo,
       academia_id: usuario.academia_id?.toString() || null,
-      admin_id: null,
-      professor_id: null,
-      aluno_id: null,
+      admin_id,
+      professor_id,
+      aluno_id,
     };
-
-    if (tipo === 'ADMIN') {
-      tokenPayload.admin_id = papelId?.toString() || null;
-    }
-
-    if (tipo === 'PROFESSOR') {
-      tokenPayload.professor_id = papelId?.toString() || null;
-    }
-
-    if (tipo === 'ALUNO') {
-      tokenPayload.aluno_id = papelId?.toString() || null;
-    }
 
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
       expiresIn: '7d',
@@ -184,6 +169,11 @@ router.post('/login', async (req, res) => {
     return res.status(200).json({
       token,
       tipo,
+      ids: {
+        admin_id,
+        professor_id,
+        aluno_id,
+      },
       usuario: formatBigInt(usuario),
     });
   } catch (error) {
@@ -196,7 +186,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Solicitar código de verificação
 router.post('/solicitacao-codigo', async (req, res) => {
   try {
     const { telefone } = req.body;
@@ -228,17 +217,14 @@ router.post('/solicitacao-codigo', async (req, res) => {
   }
 });
 
-// Redefinir senha
 router.post('/redefinicao-senha', async (req, res) => {
   try {
     const { codigoVerificacao, novaSenha } = req.body;
 
-    const validacaoBasica = [
+    const campoVazio = [
       { valor: codigoVerificacao, campoNome: 'Código de Verificação' },
       { valor: novaSenha, campoNome: 'Senha' },
-    ];
-
-    const campoVazio = validacaoBasica.find((campo) => !campo.valor?.trim());
+    ].find((campo) => !campo.valor?.trim());
 
     if (campoVazio) {
       return res.status(400).json({

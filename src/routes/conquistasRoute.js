@@ -4,29 +4,34 @@ import prisma from '../../prisma/client.js';
 
 const router = express.Router();
 
-//Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
-    JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
+    JSON.stringify(data, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    ),
   );
 
-//Cadastrar conquista
+// Cadastrar conquista
 router.post('/', auth, async (req, res) => {
   try {
     const admin_id = req.usuario.admin_id;
     const { nome, descricao, condicao_treinos } = req.body;
 
-    //1. Fazer a validação básica
-    const validaçãoBasica = [
+    if (!admin_id) {
+      return res.status(403).json({
+        error: 'Apenas administradores podem cadastrar conquistas.',
+      });
+    }
+
+    const validacaoBasica = [
       { valor: nome, campoNome: 'Nome' },
       { valor: descricao, campoNome: 'Descrição' },
       { valor: condicao_treinos, campoNome: 'Quantidade de fichas finalizadas' },
     ];
 
-    const campoVazio = validaçãoBasica.find((campo) => {
+    const campoVazio = validacaoBasica.find((campo) => {
       if (campo.valor === null || campo.valor === undefined) return true;
       if (typeof campo.valor === 'string') return !campo.valor.trim();
-
       return false;
     });
 
@@ -36,27 +41,34 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    if (condicao_treinos !== undefined) {
-  if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
-    return res.status(400).json({
-      error:
-        "A quantidade de fichas finalizadas deve ser um número válido e maior ou igual a zero.",
+    if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
+      return res.status(400).json({
+        error:
+          'A quantidade de fichas finalizadas deve ser um número válido e maior ou igual a zero.',
+      });
+    }
+
+    const conquistaExiste = await prisma.conquista.findUnique({
+      where: {
+        nome: nome.trim(),
+      },
     });
-  }
 
-  dadosConquista.condicao_treinos = parseInt(condicao_treinos, 10);
-}
+    if (conquistaExiste) {
+      return res.status(409).json({
+        error: 'Já existe uma conquista cadastrada com esse nome.',
+      });
+    }
 
-    //2. Criar a conquista
     const conquista = await prisma.conquista.create({
       data: {
         nome: nome.trim(),
-        descricao,
+        descricao: descricao.trim(),
         condicao_treinos: parseInt(condicao_treinos, 10),
       },
     });
 
-    return res.status(201).json(conquista);
+    return res.status(201).json(formatBigInt(conquista));
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
@@ -66,12 +78,16 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-//Listar conquista
+// Listar conquistas
 router.get('/', auth, async (req, res) => {
   try {
-    const conquistas = await prisma.conquista.findMany();
+    const conquistas = await prisma.conquista.findMany({
+      orderBy: {
+        condicao_treinos: 'asc',
+      },
+    });
 
-    return res.json(conquistas);
+    return res.json(formatBigInt(conquistas));
   } catch (error) {
     console.error('Erro:', error);
     return res.status(500).json({
@@ -80,18 +96,61 @@ router.get('/', auth, async (req, res) => {
     });
   }
 });
+// Listar todas as conquistas com status do aluno logado
+router.get('/minhas/status', auth, async (req, res) => {
+  try {
+    const aluno_id = req.usuario.aluno_id;
 
-// Buscar exercício por id do aluno
-// Listar todas as conquistas de um aluno específico
+    if (!aluno_id) {
+      return res.status(403).json({
+        error: 'Apenas alunos podem visualizar suas conquistas.',
+      });
+    }
+
+    const conquistas = await prisma.conquista.findMany({
+      orderBy: {
+        condicao_treinos: 'asc',
+      },
+    });
+
+    const conquistasDoAluno = await prisma.alunoConquista.findMany({
+      where: {
+        aluno_id: BigInt(aluno_id),
+      },
+    });
+
+    const idsConcluidas = conquistasDoAluno.map((item) =>
+      item.conquista_id.toString(),
+    );
+
+    const resultado = conquistas.map((conquista) => ({
+      id: conquista.id.toString(),
+      nome: conquista.nome,
+      descricao: conquista.descricao,
+      condicao_treinos: conquista.condicao_treinos,
+      concluida: idsConcluidas.includes(conquista.id.toString()),
+    }));
+
+    return res.json(resultado);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Erro ao buscar conquistas.',
+      message: error.message,
+    });
+  }
+});
+
+// Listar conquistas de um aluno específico
 router.get('/:aluno_id', auth, async (req, res) => {
   try {
     const { aluno_id } = req.params;
 
     if (!aluno_id || isNaN(Number(aluno_id))) {
-      return res.status(400).json({ error: 'O ID do aluno fornecido é inválido.' });
+      return res.status(400).json({
+        error: 'O ID do aluno fornecido é inválido.',
+      });
     }
 
-    // 1. Buscar todas as conquistas vinculadas a este aluno
     const conquistasDoAluno = await prisma.alunoConquista.findMany({
       where: {
         aluno_id: BigInt(aluno_id),
@@ -99,13 +158,10 @@ router.get('/:aluno_id', auth, async (req, res) => {
       include: {
         conquista: true,
       },
+      orderBy: {
+        recebido_em: 'desc',
+      },
     });
-
-    if (conquistasDoAluno.length === 0) {
-      return res
-        .status(404)
-        .json({ message: 'Este aluno ainda não possui nenhuma conquista cadastrada.' });
-    }
 
     return res.status(200).json(formatBigInt(conquistasDoAluno));
   } catch (error) {
@@ -117,45 +173,74 @@ router.get('/:aluno_id', auth, async (req, res) => {
   }
 });
 
-//Atualizar os dados da conquista
+// Atualizar conquista
 router.patch('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
     const admin_id = req.usuario.admin_id;
+    const { id } = req.params;
     const { nome, descricao, condicao_treinos } = req.body;
 
-    //1. Verificar se a conquista existe
-    const conquistaExiste = await prisma.conquista.findFirst({
+    if (!admin_id) {
+      return res.status(403).json({
+        error: 'Apenas administradores podem atualizar conquistas.',
+      });
+    }
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({
+        error: 'O ID da conquista é inválido.',
+      });
+    }
+
+    const conquistaExiste = await prisma.conquista.findUnique({
       where: {
         id: BigInt(id),
       },
     });
 
     if (!conquistaExiste) {
-      return res.status(400).json({
+      return res.status(404).json({
         error: 'Conquista não encontrada.',
       });
     }
 
-    //2. Criar um objeto dinâmico com os campos que serão atualizados na tabela Conquistas
     const dadosConquista = {};
 
-    if (nome !== undefined) dadosConquista.nome = nome;
-      if (descricao !== undefined) dadosConquista.descricao = descricao;
-        if (condicao_treinos !== undefined) {
-          if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
-            return res.status(400).json({
-            error: "A condição de treinos deve ser um número válido e maior ou igual a zero.",
+    if (nome !== undefined) {
+      if (!nome.trim()) {
+        return res.status(400).json({
+          error: 'O nome da conquista não pode ser vazio.',
         });
+      }
+
+      dadosConquista.nome = nome.trim();
     }
 
-  dadosConquista.condicao_treinos = parseInt(condicao_treinos, 10);
-}
-    
+    if (descricao !== undefined) {
+      if (!descricao.trim()) {
+        return res.status(400).json({
+          error: 'A descrição da conquista não pode ser vazia.',
+        });
+      }
 
-    //3. Executar a atualização no banco de dados
+      dadosConquista.descricao = descricao.trim();
+    }
+
+    if (condicao_treinos !== undefined) {
+      if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
+        return res.status(400).json({
+          error:
+            'A quantidade de fichas finalizadas deve ser um número válido e maior ou igual a zero.',
+        });
+      }
+
+      dadosConquista.condicao_treinos = parseInt(condicao_treinos, 10);
+    }
+
     const conquistaAtualizada = await prisma.conquista.update({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
       data: dadosConquista,
     });
 
@@ -172,30 +257,44 @@ router.patch('/:id', auth, async (req, res) => {
   }
 });
 
-//Excluir a conquista
+// Excluir conquista
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
     const admin_id = req.usuario.admin_id;
+    const { id } = req.params;
 
-    //1. Buscar conquista
+    if (!admin_id) {
+      return res.status(403).json({
+        error: 'Apenas administradores podem excluir conquistas.',
+      });
+    }
+
+    if (!id || isNaN(Number(id))) {
+      return res.status(400).json({
+        error: 'O ID da conquista é inválido.',
+      });
+    }
+
     const conquistaExiste = await prisma.conquista.findUnique({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
     });
 
     if (!conquistaExiste) {
-      return res.status(400).json({
+      return res.status(404).json({
         error: 'Conquista não encontrada.',
       });
     }
 
-    //2. Deletar a conquista
     await prisma.conquista.delete({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
     });
 
-    res.json({
-      message: 'Conquista excluida com sucesso.',
+    return res.json({
+      message: 'Conquista excluída com sucesso.',
     });
   } catch (error) {
     console.error('Erro:', error);

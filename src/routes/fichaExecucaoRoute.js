@@ -5,39 +5,94 @@ import { processarGamificacaoTreino } from '../services/gamificacao.js';
 
 const router = express.Router();
 
-//Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
-    JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
+    JSON.stringify(data, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
+    ),
   );
 
-//Iniciar treino
+// Iniciar ficha
 router.post('/iniciar/:ficha_id', auth, async (req, res) => {
   try {
     const aluno_id = req.usuario.aluno_id;
     const { ficha_id } = req.params;
 
-    //Verificar se já não existe um treino em andamento
-    const treinoAndamento = await prisma.execucaoFicha.findFirst({
-      where: {
-        ficha_id: BigInt(ficha_id),
-        aluno_id: BigInt(aluno_id),
-        status: 'EM_ANDAMENTO',
-      },
-    });
-
-    if (treinoAndamento) {
-      return res.status(400).json({
-        error: 'Você já possui uma sessão desse treino em andamento.',
-        execucao: formatBigInt(treinoAndamento),
+    if (!aluno_id) {
+      return res.status(403).json({
+        error: 'Apenas alunos podem iniciar fichas.',
       });
     }
 
-    //Caso não exista, iniciar o treino
+    const ficha = await prisma.fichaTreino.findUnique({
+      where: { id: BigInt(ficha_id) },
+    });
+
+    if (!ficha) {
+      return res.status(404).json({
+        error: 'Ficha não encontrada.',
+      });
+    }
+
+    if (!ficha.treino_id) {
+      return res.status(400).json({
+        error: 'Esta ficha não está vinculada a nenhum treino.',
+      });
+    }
+
+    const execucaoTreino = await prisma.execucaoTreino.findFirst({
+      where: {
+        treino_id: BigInt(ficha.treino_id),
+        aluno_id: BigInt(aluno_id),
+        status: 'EM_ANDAMENTO',
+      },
+      orderBy: {
+        iniciado_em: 'desc',
+      },
+    });
+
+    if (!execucaoTreino) {
+      return res.status(400).json({
+        error: 'Inicie o treino antes de iniciar a ficha.',
+      });
+    }
+
+    const fichaAndamento = await prisma.execucaoFicha.findFirst({
+      where: {
+        ficha_id: BigInt(ficha_id),
+        aluno_id: BigInt(aluno_id),
+        execucao_treino_id: execucaoTreino.id,
+        status: 'EM_ANDAMENTO',
+      },
+      orderBy: {
+        iniciado_em: 'desc',
+      },
+    });
+
+    if (fichaAndamento) {
+      return res.status(200).json(formatBigInt(fichaAndamento));
+    }
+
+    const fichaFinalizadaNesteTreino = await prisma.execucaoFicha.findFirst({
+      where: {
+        ficha_id: BigInt(ficha_id),
+        aluno_id: BigInt(aluno_id),
+        execucao_treino_id: execucaoTreino.id,
+        status: 'FINALIZADA',
+      },
+    });
+
+    if (fichaFinalizadaNesteTreino) {
+      return res.status(400).json({
+        error: 'Esta ficha já foi finalizada nesta execução do treino.',
+      });
+    }
+
     const execucao = await prisma.execucaoFicha.create({
       data: {
         ficha_id: BigInt(ficha_id),
         aluno_id: BigInt(aluno_id),
+        execucao_treino_id: execucaoTreino.id,
         status: 'EM_ANDAMENTO',
       },
     });
@@ -52,28 +107,56 @@ router.post('/iniciar/:ficha_id', auth, async (req, res) => {
   }
 });
 
-//Atualizar a carga real e a data de execução de um exercício específico
+// Registrar exercício da ficha
 router.post('/exercicios/registrar/:execucao_id/:ficha_exercicio_id', auth, async (req, res) => {
   try {
     const aluno_id = req.usuario.aluno_id;
     const { execucao_id, ficha_exercicio_id } = req.params;
     const { carga_real } = req.body;
 
-    // 1. Validação de Segurança: Garante que o usuário logado é de fato um aluno
     if (!aluno_id) {
-      return res.status(403).json({ error: 'Apenas alunos podem registrar treinos.' });
+      return res.status(403).json({
+        error: 'Apenas alunos podem registrar treinos.',
+      });
     }
 
-    // 2. Validação dos IDs da URL para evitar quebra do BigInt
     if (isNaN(Number(execucao_id)) || isNaN(Number(ficha_exercicio_id))) {
-      return res.status(400).json({ error: 'Os identificadores fornecidos são inválidos.' });
+      return res.status(400).json({
+        error: 'Os identificadores fornecidos são inválidos.',
+      });
     }
 
     const idExecucao = BigInt(execucao_id);
     const idFichaExercicio = BigInt(ficha_exercicio_id);
     const idAluno = BigInt(aluno_id);
 
-    // 3. Validação Opcional: Se houver um registro existente, garantir que pertence a este aluno
+    const execucaoFicha = await prisma.execucaoFicha.findFirst({
+      where: {
+        id: idExecucao,
+        aluno_id: idAluno,
+        status: 'EM_ANDAMENTO',
+      },
+    });
+
+    if (!execucaoFicha) {
+      return res.status(404).json({
+        error: 'Execução da ficha não encontrada ou não está em andamento.',
+      });
+    }
+
+    const fichaExercicio = await prisma.fichaExercicio.findFirst({
+      where: {
+        id: idFichaExercicio,
+        ficha_id: execucaoFicha.ficha_id,
+      },
+    });
+
+    if (!fichaExercicio) {
+      return res.status(404).json({
+        error: 'Este exercício não pertence à ficha em execução.',
+      });
+    }
+
     const registroExistente = await prisma.registroTreino.findUnique({
       where: {
         execucao_id_ficha_exercicio_id: {
@@ -84,10 +167,35 @@ router.post('/exercicios/registrar/:execucao_id/:ficha_exercicio_id', auth, asyn
     });
 
     if (registroExistente && registroExistente.aluno_id !== idAluno) {
-      return res.status(403).json({ error: 'Você não tem permissão para alterar este registro.' });
+      return res.status(403).json({
+        error: 'Você não tem permissão para alterar este registro.',
+      });
     }
 
-    // 4. Executa o Upsert com segurança
+    const dezSegundosAtras = new Date(Date.now() - 10 * 1000);
+
+    const ultimoExercicioFinalizado = await prisma.registroTreino.findFirst({
+      where: {
+        aluno_id: idAluno,
+        execucao_id: idExecucao,
+        data_execucao: {
+          gte: dezSegundosAtras,
+        },
+        NOT: {
+          ficha_exercicio_id: idFichaExercicio,
+        },
+      },
+      orderBy: {
+        data_execucao: 'desc',
+      },
+    });
+
+    if (ultimoExercicioFinalizado && !registroExistente) {
+      return res.status(400).json({
+        error: 'Você deve aguardar 10 segundos para concluir outro exercício.',
+      });
+    }
+
     const registro = await prisma.registroTreino.upsert({
       where: {
         execucao_id_ficha_exercicio_id: {
@@ -96,15 +204,20 @@ router.post('/exercicios/registrar/:execucao_id/:ficha_exercicio_id', auth, asyn
         },
       },
       update: {
-        // Se carga_real for enviada, valida e converte, senão mantém nula/não altera
-        carga_real: carga_real !== undefined && carga_real !== null ? parseFloat(carga_real) : null,
-        data_execucao: new Date(), // Gera o objeto Date padrão aceito pelo Prisma
+        carga_real:
+          carga_real !== undefined && carga_real !== null
+            ? parseFloat(carga_real)
+            : null,
+        data_execucao: new Date(),
       },
       create: {
         aluno_id: idAluno,
         execucao_id: idExecucao,
         ficha_exercicio_id: idFichaExercicio,
-        carga_real: carga_real !== undefined && carga_real !== null ? parseFloat(carga_real) : null,
+        carga_real:
+          carga_real !== undefined && carga_real !== null
+            ? parseFloat(carga_real)
+            : null,
         data_execucao: new Date(),
       },
     });
@@ -122,7 +235,7 @@ router.post('/exercicios/registrar/:execucao_id/:ficha_exercicio_id', auth, asyn
   }
 });
 
-//Finalizar treino
+// Finalizar ficha
 router.post('/finalizar/:ficha_id', auth, async (req, res) => {
   try {
     const aluno_id = req.usuario.aluno_id;
@@ -130,38 +243,48 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
 
     if (!aluno_id) {
       return res.status(403).json({
-        error: 'Apenas alunos podem finalizar treinos.',
+        error: 'Apenas alunos podem finalizar fichas.',
       });
     }
 
     const resultado = await prisma.$transaction(async (tx) => {
-      const execucao = await tx.execucaoFicha.findFirst({
+      const ficha = await tx.fichaTreino.findUnique({
+        where: { id: BigInt(ficha_id) },
+      });
+
+      if (!ficha) {
+        throw new Error('Ficha não encontrada.');
+      }
+
+      if (!ficha.treino_id) {
+        throw new Error('Esta ficha não está vinculada a nenhum treino.');
+      }
+
+      const execucaoTreino = await tx.execucaoTreino.findFirst({
         where: {
-          ficha_id: BigInt(ficha_id),
+          treino_id: BigInt(ficha.treino_id),
           aluno_id: BigInt(aluno_id),
           status: 'EM_ANDAMENTO',
         },
         orderBy: { iniciado_em: 'desc' },
       });
 
-      if (!execucao) {
-        throw new Error('Nenhuma execução de treino em andamento encontrada para esta ficha.');
+      if (!execucaoTreino) {
+        throw new Error('Nenhuma execução de treino em andamento encontrada.');
       }
 
-      const dozeHorasAtras = new Date(Date.now() - 10 * 1000);
-
-      const finalizouNasUltimas12Horas = await tx.execucaoFicha.findFirst({
+      const execucao = await tx.execucaoFicha.findFirst({
         where: {
+          ficha_id: BigInt(ficha_id),
           aluno_id: BigInt(aluno_id),
-          status: 'FINALIZADA',
-          finalizado_em: {
-            gte: dozeHorasAtras,
-          },
+          execucao_treino_id: execucaoTreino.id,
+          status: 'EM_ANDAMENTO',
         },
+        orderBy: { iniciado_em: 'desc' },
       });
 
-      if (finalizouNasUltimas12Horas) {
-        throw new Error('Você só pode finalizar uma ficha a cada 12 horas.');
+      if (!execucao) {
+      throw new Error('Nenhuma execução em andamento encontrada para esta ficha.');
       }
 
       const totalExerciciosFicha = await tx.fichaExercicio.count({
@@ -180,7 +303,7 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
 
       if (exerciciosRespondidos < totalExerciciosFicha) {
         throw new Error(
-          `Finalize todos os exercícios antes de finalizar a ficha. Concluídos: ${exerciciosRespondidos}/${totalExerciciosFicha}.`
+          `Finalize todos os exercícios antes de finalizar a ficha. Concluídos: ${exerciciosRespondidos}/${totalExerciciosFicha}.`,
         );
       }
 
@@ -198,7 +321,7 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
     const conquistasGanhas = await processarGamificacaoTreino(aluno_id);
 
     return res.status(200).json({
-      mensagem: 'Treino finalizado com sucesso!',
+      mensagem: 'Ficha finalizada com sucesso!',
       execucao: formatBigInt(resultado),
       conquistasGanhas,
     });
@@ -206,7 +329,7 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
     console.error('Erro:', error);
 
     return res.status(400).json({
-      error: error.message || 'Erro ao finalizar treino.',
+      error: error.message || 'Erro ao finalizar ficha.',
     });
   }
 });

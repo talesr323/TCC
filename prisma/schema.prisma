@@ -13,14 +13,22 @@ enum Nivel {
   AVANCADO
 }
 
+enum StatusExecucao {
+  NAO_INICIADA
+  EM_ANDAMENTO
+  INCOMPLETA
+  FINALIZADA
+  CANCELADA
+}
+
 model Usuario {
-  id         BigInt   @id @default(autoincrement())
-  nome       String   @db.VarChar(150)
-  email      String   @unique @db.VarChar(150)
-  cpf        String   @unique @db.Char(255)
-  senha_hash String?  @db.VarChar(255)
-  telefone   String   @unique @db.VarChar(20)
-  ativo      Boolean  @default(false)
+  id         BigInt  @id @default(autoincrement())
+  nome       String  @db.VarChar(150)
+  email      String  @unique @db.VarChar(150)
+  cpf        String  @unique @db.VarChar(255)
+  senha_hash String? @db.VarChar(255)
+  telefone   String  @unique @db.VarChar(20)
+  ativo      Boolean @default(false)
 
   academia_id BigInt
   academia    Academia @relation(fields: [academia_id], references: [id])
@@ -28,36 +36,36 @@ model Usuario {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  admin      Admin?
-  professor  Professor?
-  aluno      Aluno?
+  admin     Admin?
+  professor Professor?
+  aluno     Aluno?
 
-  tokens     TokenAtivacao[]
-
-  codigos_verificacao    CodigoVerificacao[]
+  tokens              TokenAtivacao[]
+  codigos_verificacao CodigoVerificacao[]
 
   @@map("usuarios")
 }
 
 model Admin {
-  id         BigInt  @id @default(autoincrement())
-  usuario_id BigInt  @unique
+  id         BigInt @id @default(autoincrement())
+  usuario_id BigInt @unique
 
-  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
   @@map("admins")
 }
 
 model Professor {
-  id         BigInt  @id @default(autoincrement())
-  usuario_id BigInt  @unique
-  cref       String  @unique @db.VarChar(20)
+  id         BigInt @id @default(autoincrement())
+  usuario_id BigInt @unique
+  cref       String @unique @db.VarChar(20)
 
-  usuario    Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
-  gruposTreino  GrupoTreino[]
-  fichasTreino  FichaTreino[]
-  exercicios    Exercicio[]
+  gruposTreino GrupoTreino[]
+  fichasTreino FichaTreino[]
+  exercicios   Exercicio[]
+  treinos      Treino[]
 
   @@map("professores")
 }
@@ -68,10 +76,14 @@ model Aluno {
 
   usuario Usuario @relation(fields: [usuario_id], references: [id])
 
-  fichas            FichaTreino[]
-  registrosTreino   RegistroTreino[]
-  conquistas        AlunoConquista[]
-  execucoes         ExecucaoFicha[]
+  fichas          FichaTreino[]
+  registrosTreino RegistroTreino[]
+  conquistas      AlunoConquista[]
+  execucoes       ExecucaoFicha[]
+  execucoesTreino ExecucaoTreino[]
+  treinos         Treino[]
+
+  @@map("alunos")
 }
 
 model GrupoTreino {
@@ -82,78 +94,138 @@ model GrupoTreino {
   criado_por BigInt
   created_at DateTime @default(now())
 
-  professor  Professor @relation(fields: [criado_por], references: [id])
-  fichas     FichaTreino[]
+  professor Professor     @relation(fields: [criado_por], references: [id])
+  fichas    FichaTreino[]
 
   @@map("grupos_treino")
 }
 
+model Treino {
+  id        BigInt  @id @default(autoincrement())
+  nome      String  @db.VarChar(150)
+  descricao String? @db.VarChar(255)
+
+  aluno_id     BigInt
+  professor_id BigInt
+
+  aluno     Aluno     @relation(fields: [aluno_id], references: [id])
+  professor Professor @relation(fields: [professor_id], references: [id])
+
+  fichas    FichaTreino[]
+  execucoes ExecucaoTreino[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("treinos")
+}
+
+model ExecucaoTreino {
+  id BigInt @id @default(autoincrement())
+
+  treino_id      BigInt
+  aluno_id       BigInt
+  execucoesFicha ExecucaoFicha[]
+
+  iniciado_em   DateTime  @default(now())
+  finalizado_em DateTime?
+
+  status StatusExecucao @default(NAO_INICIADA)
+
+  treino Treino @relation(fields: [treino_id], references: [id])
+  aluno  Aluno  @relation(fields: [aluno_id], references: [id])
+
+  @@map("execucao_treino")
+}
+
 model FichaTreino {
-  id           BigInt   @id @default(autoincrement())
-  nome         String   @db.VarChar(150)
+  id           BigInt    @id @default(autoincrement())
+  nome         String    @db.VarChar(150)
   aluno_id     BigInt?
   professor_id BigInt
   grupo_id     BigInt?
+  treino_id    BigInt?
   data_inicio  DateTime?
   data_fim     DateTime?
-  ativa        Boolean  @default(true)
+  ativa        Boolean   @default(true)
 
-  aluno     Aluno?     @relation(fields: [aluno_id], references: [id])
-  professor Professor @relation(fields: [professor_id], references: [id])
+  aluno     Aluno?       @relation(fields: [aluno_id], references: [id])
+  professor Professor    @relation(fields: [professor_id], references: [id])
   grupo     GrupoTreino? @relation(fields: [grupo_id], references: [id])
+  treino    Treino?      @relation(fields: [treino_id], references: [id])
 
   exercicios FichaExercicio[]
-  execucoes ExecucaoFicha[]
+  execucoes  ExecucaoFicha[]
 
   @@map("fichas_treino")
 }
 
 model Exercicio {
-  id            BigInt  @id @default(autoincrement())
-  nome          String  @db.VarChar(150)
-  descricao     String? @db.Text
-  grupo_muscular String? @db.VarChar(100)
-  midia_url     String?
-  criado_por    BigInt
+  id              BigInt   @id @default(autoincrement())
+  nome            String
+  descricao       String?
+  grupo_muscular  String
+  midia_url       String?   @db.VarChar(255)
 
-  professor Professor @relation(fields: [criado_por], references: [id])
-  fichas    FichaExercicio[]
+  criado_por      BigInt
+  professor       Professor @relation(fields: [criado_por], references: [id])
 
-  @@map("exercicios")
+  fichas          FichaExercicio[]
 }
 
 model FichaExercicio {
-  id              BigInt   @id @default(autoincrement())
-  ficha_id        BigInt
-  exercicio_id    BigInt
-  series          Int
-  repeticoes      Int
+  id                BigInt   @id @default(autoincrement())
+  ficha_id          BigInt
+  exercicio_id      BigInt
+  series            Int
+  repeticoes        Int
   descanso_segundos Int?
-  carga_sugerida  Decimal? @db.Decimal(6,2)
+  carga_sugerida    Decimal? @db.Decimal(6, 2)
 
-  ficha      FichaTreino @relation(fields: [ficha_id], references: [id], onDelete: Cascade)
-  exercicio  Exercicio   @relation(fields: [exercicio_id], references: [id])
+  ficha     FichaTreino @relation(fields: [ficha_id], references: [id], onDelete: Cascade)
+  exercicio Exercicio   @relation(fields: [exercicio_id], references: [id])
 
-  registros  RegistroTreino[]
+  registros RegistroTreino[]
 
   @@map("fichas_exercicios")
 }
 
 model RegistroTreino {
-  id                BigInt   @id @default(autoincrement())
-  aluno_id          BigInt
+  id                 BigInt   @id @default(autoincrement())
+  aluno_id           BigInt
   ficha_exercicio_id BigInt
-  execucao_id       BigInt
-  carga_real        Decimal? @db.Decimal(6,2)
-  data_execucao     DateTime @default(now())
+  execucao_id        BigInt
+  carga_real         Decimal? @db.Decimal(6, 2)
+  data_execucao      DateTime @default(now())
 
-  aluno        Aluno          @relation(fields: [aluno_id], references: [id])
+  aluno          Aluno          @relation(fields: [aluno_id], references: [id])
   fichaExercicio FichaExercicio @relation(fields: [ficha_exercicio_id], references: [id], onDelete: Cascade)
   execucao_ficha ExecucaoFicha  @relation(fields: [execucao_id], references: [id], onDelete: Cascade)
 
   @@unique([execucao_id, ficha_exercicio_id], name: "execucao_id_ficha_exercicio_id")
-
   @@map("registros_treino")
+}
+
+model ExecucaoFicha {
+  id BigInt @id @default(autoincrement())
+
+  ficha_id BigInt
+  aluno_id BigInt
+
+  execucao_treino_id BigInt?
+
+  iniciado_em   DateTime  @default(now())
+  finalizado_em DateTime?
+
+  status StatusExecucao @default(NAO_INICIADA)
+
+  ficha          FichaTreino     @relation(fields: [ficha_id], references: [id])
+  aluno          Aluno           @relation(fields: [aluno_id], references: [id])
+  execucaoTreino ExecucaoTreino? @relation(fields: [execucao_treino_id], references: [id])
+
+  registros RegistroTreino[]
+
+  @@map("execucao_ficha")
 }
 
 model TokenAtivacao {
@@ -169,13 +241,13 @@ model TokenAtivacao {
 }
 
 model Academia {
-  id        BigInt   @id @default(autoincrement())
-  nome      String   @db.VarChar(150)
-  cnpj      String   @unique @db.VarChar(255)
-  endereco  String   @db.VarChar(255)
-  cep       String   @db.VarChar(10)
-  cidade    String   @db.VarChar(100)
-  estado    String   @db.VarChar(2)
+  id       BigInt @id @default(autoincrement())
+  nome     String @db.VarChar(150)
+  cnpj     String @unique @db.VarChar(255)
+  endereco String @db.VarChar(255)
+  cep      String @db.VarChar(10)
+  cidade   String @db.VarChar(100)
+  estado   String @db.VarChar(2)
 
   created_at DateTime @default(now())
 
@@ -184,68 +256,38 @@ model Academia {
   @@map("academias")
 }
 
-enum StatusExecucao {
-  NAO_INICIADA
-  EM_ANDAMENTO
-  INCOMPLETA
-  FINALIZADA
-  CANCELADA
-}
-
-model ExecucaoFicha {
-  id             BigInt @id @default(autoincrement())
-
-  ficha_id       BigInt
-  aluno_id       BigInt
-
-  iniciado_em    DateTime @default(now())
-  finalizado_em  DateTime?
-
-  status         StatusExecucao @default(NAO_INICIADA)
-
-  ficha          FichaTreino @relation(fields: [ficha_id], references: [id])
-  aluno          Aluno @relation(fields: [aluno_id], references: [id])
-
-  registros      RegistroTreino[]
-
-  @@map("execucao_ficha")
-}
-
 model Conquista {
-  id          BigInt @id @default(autoincrement())
-
-  nome        String @unique
-  descricao   String
+  id               BigInt @id @default(autoincrement())
+  nome             String @unique
+  descricao        String
   condicao_treinos Int
 
-  alunos      AlunoConquista[]
+  alunos AlunoConquista[]
 
   @@map("conquistas")
 }
 
 model AlunoConquista {
-  aluno_id      BigInt
-  conquista_id  BigInt
+  aluno_id     BigInt
+  conquista_id BigInt
+  recebido_em  DateTime @default(now())
 
-  recebido_em   DateTime @default(now())
-
-  aluno         Aluno @relation(fields: [aluno_id], references: [id])
-  conquista     Conquista @relation(fields: [conquista_id], references: [id], onDelete: Cascade)
+  aluno     Aluno     @relation(fields: [aluno_id], references: [id])
+  conquista Conquista @relation(fields: [conquista_id], references: [id], onDelete: Cascade)
 
   @@id([aluno_id, conquista_id])
-
   @@map("aluno_conquistas")
 }
 
 model CodigoVerificacao {
-  id                     BigInt   @id @default(autoincrement())
-  usuario_id             BigInt
-  codigo_verificacao     String   @unique @db.VarChar(255)
-  expira_em              DateTime
-  usado                  Boolean  @default(false)
-  created_at             DateTime @default(now())
+  id                 BigInt   @id @default(autoincrement())
+  usuario_id         BigInt
+  codigo_verificacao String   @unique @db.VarChar(255)
+  expira_em          DateTime
+  usado              Boolean  @default(false)
+  created_at         DateTime @default(now())
 
-  usuario    Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
   @@map("codigos_verificacao")
 }

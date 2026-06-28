@@ -1,11 +1,9 @@
 import auth from '../middlewares/auth.js';
 import express from 'express';
 import prisma from '../../prisma/client.js';
-import e from 'express';
 
 const router = express.Router();
 
-//Lista de grupos musculares permitidos
 const GRUPOS_MUSCULARES = [
   'Abdômen',
   'Antebraço',
@@ -27,9 +25,9 @@ const formatBigInt = (data) =>
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
-router.get('/select/grupos-musculares', auth, (req, res) => {
+  router.get('/select/grupos-musculares', auth, (req, res) => {
   return res.json(GRUPOS_MUSCULARES);
-});
+  });
 
 //Criar exercício
 router.post('/', auth, async (req, res) => {
