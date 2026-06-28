@@ -5,17 +5,37 @@ import e from 'express';
 
 const router = express.Router();
 
+//Lista de grupos musculares permitidos
+const GRUPOS_MUSCULARES = [
+  'Abdômen',
+  'Antebraço',
+  'Bíceps',
+  'Cardio',
+  'Costas',
+  'Glúteos',
+  'Ombro',
+  'Panturrilha',
+  'Peito',
+  'Perna',
+  'Trapézio',
+  'Tríceps',
+];
+
 //Função para tratar BigInt
 const formatBigInt = (data) =>
   JSON.parse(
     JSON.stringify(data, (key, value) => (typeof value === 'bigint' ? value.toString() : value)),
   );
 
+router.get('/select/grupos-musculares', auth, (req, res) => {
+  return res.json(GRUPOS_MUSCULARES);
+});
+
 //Criar exercício
 router.post('/', auth, async (req, res) => {
   try {
     const professor_id = req.usuario.professor_id;
-    const { nome, descricao, grupo_muscular } = req.body;
+    const { nome, descricao, grupo_muscular, midia_url } = req.body;
 
     // 1. Fazer a validação básica
     const camposValidacao = [
@@ -30,6 +50,13 @@ router.post('/', auth, async (req, res) => {
     if (campoVazio) {
       return res.status(400).json({
         error: `O campo "${campoVazio.campoNome}" é obrigatório.`,
+      });
+    }
+
+    //1.1. Fazer a validação do grupo muscular selecionado
+    if (!GRUPOS_MUSCULARES.includes(grupo_muscular)) {
+      return res.status(400).json({
+        error: `Grupo muscular inválido. Escolha uma das opções: ${GRUPOS_MUSCULARES.join(', ')}.`,
       });
     }
 
@@ -54,6 +81,7 @@ router.post('/', auth, async (req, res) => {
         nome: nome.trim(),
         descricao,
         grupo_muscular,
+        midia_url: midia_url ? midia_url.trim() : null,
         professor: {
           connect: { id: professor_id },
         },
@@ -140,7 +168,7 @@ router.get('/', auth, async (req, res) => {
 router.patch('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, descricao, grupo_muscular } = req.body;
+    const { nome, descricao, grupo_muscular, midia_url } = req.body;
 
     //1. Verificar se o exercício existe
     const exercicioExiste = await prisma.exercicio.findFirst({
@@ -161,6 +189,7 @@ router.patch('/:id', auth, async (req, res) => {
     if (nome !== undefined) dadosExercicio.nome = nome;
     if (descricao !== undefined) dadosExercicio.descricao = descricao;
     if (grupo_muscular !== undefined) dadosExercicio.grupo_muscular = grupo_muscular;
+    if (midia_url !== undefined) dadosExercicio.midia_url = midia_url;
 
     //3. Executar a atualização no banco de dados
     const exercicioAtualizado = await prisma.exercicio.update({

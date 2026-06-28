@@ -122,14 +122,19 @@ router.post('/exercicios/registrar/:execucao_id/:ficha_exercicio_id', auth, asyn
   }
 });
 
-//Finalizar treino (com verificação inteligente de status e Gamificação)
+//Finalizar treino
 router.post('/finalizar/:ficha_id', auth, async (req, res) => {
   try {
     const aluno_id = req.usuario.aluno_id;
     const { ficha_id } = req.params;
 
+    if (!aluno_id) {
+      return res.status(403).json({
+        error: 'Apenas alunos podem finalizar treinos.',
+      });
+    }
+
     const resultado = await prisma.$transaction(async (tx) => {
-      // 3.1. Buscar a execução em andamento
       const execucao = await tx.execucaoFicha.findFirst({
         where: {
           ficha_id: BigInt(ficha_id),
@@ -143,33 +148,46 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
         throw new Error('Nenhuma execução de treino em andamento encontrada para esta ficha.');
       }
 
-      // 3.2. Mapear todos os exercícios obrigatórios da Ficha de Treino
+      const dozeHorasAtras = new Date(Date.now() - 10 * 1000);
+
+      const finalizouNasUltimas12Horas = await tx.execucaoFicha.findFirst({
+        where: {
+          aluno_id: BigInt(aluno_id),
+          status: 'FINALIZADA',
+          finalizado_em: {
+            gte: dozeHorasAtras,
+          },
+        },
+      });
+
+      if (finalizouNasUltimas12Horas) {
+        throw new Error('Você só pode finalizar uma ficha a cada 12 horas.');
+      }
+
       const totalExerciciosFicha = await tx.fichaExercicio.count({
         where: { ficha_id: BigInt(ficha_id) },
       });
 
-      // 3.3. Contar quantos desses exercícios foram respondidos pelo Aluno após o início do treino
       const exerciciosRespondidos = await tx.registroTreino.count({
         where: {
           aluno_id: BigInt(aluno_id),
-          fichaExercicio: { ficha_id: BigInt(ficha_id) },
-          data_execucao: { gte: execucao.iniciado_em },
+          execucao_id: execucao.id,
+          fichaExercicio: {
+            ficha_id: BigInt(ficha_id),
+          },
         },
       });
 
-      // 3.4. Definição da regra de negócio para o Status
-      let statusFinal = 'FINALIZADA';
-      if (exerciciosRespondidos === 0) {
-        statusFinal = 'CANCELADA';
-      } else if (exerciciosRespondidos < totalExerciciosFicha) {
-        statusFinal = 'INCOMPLETA';
+      if (exerciciosRespondidos < totalExerciciosFicha) {
+        throw new Error(
+          `Finalize todos os exercícios antes de finalizar a ficha. Concluídos: ${exerciciosRespondidos}/${totalExerciciosFicha}.`
+        );
       }
 
-      // 3.5. Atualizar a execução da Ficha
       const execucaoAtualizada = await tx.execucaoFicha.update({
         where: { id: execucao.id },
         data: {
-          status: statusFinal,
+          status: 'FINALIZADA',
           finalizado_em: new Date(),
         },
       });
@@ -177,25 +195,18 @@ router.post('/finalizar/:ficha_id', auth, async (req, res) => {
       return execucaoAtualizada;
     });
 
-    // 4. Processar gamificação APENAS se o treino foi devidamente FINALIZADO por completo
-    let conquistasGanhas = [];
-    if (resultado.status === 'FINALIZADA') {
-      conquistasGanhas = await processarGamificacaoTreino(aluno_id);
-    }
+    const conquistasGanhas = await processarGamificacaoTreino(aluno_id);
 
     return res.status(200).json({
-      mensagem:
-        resultado.status === 'FINALIZADA'
-          ? 'Treino finalizado com sucesso! Recompensas computadas.'
-          : `Treino encerrado com status: ${resultado.status}.`,
+      mensagem: 'Treino finalizado com sucesso!',
       execucao: formatBigInt(resultado),
       conquistasGanhas,
     });
   } catch (error) {
     console.error('Erro:', error);
-    return res.status(500).json({
-      error: 'Erro ao finalizar treino.',
-      message: error.message,
+
+    return res.status(400).json({
+      error: error.message || 'Erro ao finalizar treino.',
     });
   }
 });

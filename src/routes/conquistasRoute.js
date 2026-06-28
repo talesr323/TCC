@@ -14,13 +14,13 @@ const formatBigInt = (data) =>
 router.post('/', auth, async (req, res) => {
   try {
     const admin_id = req.usuario.admin_id;
-    const { nome, descricao, contagem_treinos } = req.body;
+    const { nome, descricao, condicao_treinos } = req.body;
 
     //1. Fazer a validação básica
     const validaçãoBasica = [
       { valor: nome, campoNome: 'Nome' },
       { valor: descricao, campoNome: 'Descrição' },
-      { valor: contagem_treinos, campoNome: 'Contagem de Treinos' },
+      { valor: condicao_treinos, campoNome: 'Quantidade de fichas finalizadas' },
     ];
 
     const campoVazio = validaçãoBasica.find((campo) => {
@@ -36,18 +36,23 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    if (isNaN(Number(contagem_treinos)) || Number(contagem_treinos) < 0) {
-      return res.status(400).json({
-        error: 'A contagem de treinos deve ser um número válido e maior ou igual a zero.',
-      });
-    }
+    if (condicao_treinos !== undefined) {
+  if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
+    return res.status(400).json({
+      error:
+        "A quantidade de fichas finalizadas deve ser um número válido e maior ou igual a zero.",
+    });
+  }
+
+  dadosConquista.condicao_treinos = parseInt(condicao_treinos, 10);
+}
 
     //2. Criar a conquista
     const conquista = await prisma.conquista.create({
       data: {
         nome: nome.trim(),
         descricao,
-        contagem_treinos: parseInt(contagem_treinos, 10),
+        condicao_treinos: parseInt(condicao_treinos, 10),
       },
     });
 
@@ -76,6 +81,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Buscar exercício por id do aluno
 // Listar todas as conquistas de um aluno específico
 router.get('/:aluno_id', auth, async (req, res) => {
   try {
@@ -116,7 +122,7 @@ router.patch('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const admin_id = req.usuario.admin_id;
-    const { nome, descricao, contagem_treinos } = req.body;
+    const { nome, descricao, condicao_treinos } = req.body;
 
     //1. Verificar se a conquista existe
     const conquistaExiste = await prisma.conquista.findFirst({
@@ -135,8 +141,17 @@ router.patch('/:id', auth, async (req, res) => {
     const dadosConquista = {};
 
     if (nome !== undefined) dadosConquista.nome = nome;
-    if (descricao !== undefined) dadosConquista.descricao = descricao;
-    if (contagem_treinos !== undefined) dadosConquista.contagem_treinos = contagem_treinos;
+      if (descricao !== undefined) dadosConquista.descricao = descricao;
+        if (condicao_treinos !== undefined) {
+          if (isNaN(Number(condicao_treinos)) || Number(condicao_treinos) < 0) {
+            return res.status(400).json({
+            error: "A condição de treinos deve ser um número válido e maior ou igual a zero.",
+        });
+    }
+
+  dadosConquista.condicao_treinos = parseInt(condicao_treinos, 10);
+}
+    
 
     //3. Executar a atualização no banco de dados
     const conquistaAtualizada = await prisma.conquista.update({

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+dotenv.config();
 import twilio from 'twilio';
 
 const prisma = new PrismaClient();
@@ -18,12 +19,12 @@ export async function solicitarCodigoVerificacao(telefone) {
     }
 
     //2. Gerar um código de verificação
-    const codigoVerificacao = crypto.randomInt(100000, 999999).toString();
+    const codigoGerado = crypto.randomInt(100000, 999999).toString();
     const dataExpiracao = new Date(Date.now() + 30 * 60 * 1000); //Define a expiração para 30 minutos
 
     await prisma.codigoVerificacao.create({
       data: {
-        token: codigoVerificacao,
+        codigo_verificacao: codigoGerado,
         expira_em: dataExpiracao,
         usuario_id: usuario.id,
       },
@@ -33,7 +34,7 @@ export async function solicitarCodigoVerificacao(telefone) {
     const numeroDestinatario = `whatsapp:+${telefone.replace(/\D/g, '')}`;
     const numeroRemetente = `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`;
 
-    const mensagemTexto = `Olá, ${usuario.nome}. Seu código de verificação é *${codigoVerificacao}*. Ele expira em 30 minutos.`;
+    const mensagemTexto = `Olá, ${usuario.nome}. Seu código de verificação é *${codigoGerado}*. Ele expira em 30 minutos.`;
 
     const messageResponse = await twilioClient.messages.create({
       from: numeroRemetente,
